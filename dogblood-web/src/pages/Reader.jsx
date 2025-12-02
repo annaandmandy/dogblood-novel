@@ -174,7 +174,11 @@ export default function Reader() {
 
             // 1. Call AI (Get JSON)
             const aiResponse = await generateNextChapter(
-                novel.settings,
+                {
+                    ...novel.settings,
+                    targetEndingChapter: novel.target_ending_chapter,
+                    currentChapterIndex: lastChapter.chapter_index
+                },
                 lastChapter.content,
                 characters,
                 memories
@@ -218,10 +222,16 @@ export default function Reader() {
                     const existingChar = characters.find(c => c.name.includes(update.name));
 
                     if (existingChar) {
+                        // Append status with bullet point if different
+                        let newStatus = existingChar.status;
+                        if (update.status && update.status !== existingChar.status) {
+                            newStatus = `${existingChar.status} • ${update.status}`;
+                        }
+
                         updates.push(
                             supabase.from('characters')
                                 .update({
-                                    status: update.status,
+                                    status: newStatus,
                                     description: existingChar.description + (update.description_append ? ` | ${update.description_append}` : "")
                                 })
                                 .eq('id', existingChar.id)
@@ -405,6 +415,37 @@ export default function Reader() {
                                     <Link to="/" className={`p-3 rounded-lg border ${theme.border} flex items-center justify-center gap-2 hover:opacity-80`}>
                                         <ChevronLeft size={16} /> 返回書庫
                                     </Link>
+                                </div>
+                            </section>
+
+                            {/* Ending Settings */}
+                            <section>
+                                <h4 className="text-xs font-bold opacity-50 mb-3 uppercase tracking-wider">完結設定</h4>
+                                <div className={`p-4 rounded-lg border ${theme.border} space-y-2`}>
+                                    <label className="text-xs opacity-70 block">預計完結章節 (目前: {chapters.length} 章)</label>
+                                    <div className="flex gap-2">
+                                        <input
+                                            type="number"
+                                            placeholder="無 (未設定)"
+                                            defaultValue={novel.target_ending_chapter || ''}
+                                            onBlur={async (e) => {
+                                                const val = parseInt(e.target.value);
+                                                if (!val) return;
+                                                if (val <= chapters.length + 5) {
+                                                    alert(`完結章節必須大於目前章節 + 5 (至少 ${chapters.length + 6} 章)`);
+                                                    e.target.value = novel.target_ending_chapter || '';
+                                                    return;
+                                                }
+                                                const { error } = await supabase.from('novels').update({ target_ending_chapter: val }).eq('id', novel.id);
+                                                if (!error) {
+                                                    setNovel({ ...novel, target_ending_chapter: val });
+                                                    alert(`已設定預計在第 ${val} 章完結。AI 將會開始收束劇情。`);
+                                                }
+                                            }}
+                                            className={`w-full bg-transparent border ${theme.border} rounded px-3 py-2 text-sm focus:outline-none focus:border-purple-500`}
+                                        />
+                                    </div>
+                                    <p className="text-[10px] opacity-50">設定後，AI 會在接近該章節時自動收束劇情並生成結局。</p>
                                 </div>
                             </section>
 

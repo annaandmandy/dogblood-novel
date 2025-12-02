@@ -91,10 +91,29 @@ export const generateNextChapter = async (novelContext, previousContent, charact
     const charText = characters.map(c => `- ${c.name}: ${c.description} [目前狀態: ${c.status}]`).join('\n');
     const memText = memories.slice(0, 10).map(m => `- ${m.content}`).join('\n');
 
+    let endingInstruction = "";
+    if (novelContext.targetEndingChapter) {
+        const chaptersLeft = novelContext.targetEndingChapter - novelContext.currentChapterIndex;
+        if (chaptersLeft <= 5 && chaptersLeft > 0) {
+            endingInstruction = `
+             【結局倒數】
+             這本小說預計在第 ${novelContext.targetEndingChapter} 章完結。
+             目前是第 ${novelContext.currentChapterIndex + 1} 章，還剩下 ${chaptersLeft} 章。
+             請開始收束劇情，解開伏筆，為大結局做準備。節奏可以加快。
+             `;
+        } else if (chaptersLeft <= 0) {
+            endingInstruction = `
+             【大結局】
+             這是最後一章！請為故事畫上完美的句點。
+             `;
+        }
+    }
+
     const prompt = `
     你是一名網文小說家。請根據設定撰寫下一章，並同時更新世界觀數據。
 
     【小說設定】標題: ${novelContext.title}, 主角: ${novelContext.protagonist}, 類型: ${novelContext.trope}
+    ${endingInstruction}
     【角色狀態】${charText}
     【記憶庫】${memText}
     【上一章】${previousContent.slice(-2000)}
@@ -102,15 +121,17 @@ export const generateNextChapter = async (novelContext, previousContent, charact
     【任務要求】
     1. 撰寫新章節 (約 1000-1500 字)。
     2. 偵測是否有角色狀態改變 (如: 受傷、升級、獲得物品) 或新角色登場。
-    3. 偵測是否發生值得記錄的關鍵劇情 (Memory)。
-    4. 回傳嚴格的 JSON 格式。
+    3. **若角色獲得新稱號或身分 (如: 登基成為『帝君』)，請將稱號加入 status 中，不要將其視為新角色。**
+    4. **回傳 JSON 時，'name' 欄位請務必使用「原名」，以便系統識別對應角色。**
+    5. 偵測是否發生值得記錄的關鍵劇情 (Memory)。
+    6. 回傳嚴格的 JSON 格式。
 
     【JSON Schema】
     {
       "content": "小說內文...",
       "new_memories": ["主角獲得了XX劍", "反派YYY登場"],
       "character_updates": [
-        { "name": "主角名", "status": "重傷", "description_append": "獲得了雷電異能" } 
+        { "name": "主角原名", "status": "帝君", "description_append": "統一了天下，被尊稱為帝君" } 
       ]
     }
   `;

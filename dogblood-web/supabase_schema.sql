@@ -84,3 +84,6 @@ alter table reading_progress enable row level security;
 
 -- Policies
 create policy "Allow all for productive_v1 progress" on reading_progress for all using (user_id = 'productive_v1');
+
+-- Add target_ending_chapter to novels table
+alter table novels add column if not exists target_ending_chapter integer;
