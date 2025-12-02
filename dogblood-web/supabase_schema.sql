@@ -1,0 +1,69 @@
+-- Create profiles table
+create table if not exists profiles (
+  id text primary key,
+  username text,
+  preferences jsonb default '{"fontSize": 18, "fontFamily": "font-serif", "theme": "dark"}'::jsonb
+);
+
+-- Insert the default user
+insert into profiles (id, username)
+values ('productive_v1', 'Productive User')
+on conflict (id) do nothing;
+
+-- Create novels table
+create table if not exists novels (
+  id uuid default gen_random_uuid() primary key,
+  owner_id text references profiles(id) not null,
+  title text not null,
+  genre text not null, -- 'BG' or 'BL'
+  summary text, -- The 150+ word summary
+  settings jsonb, -- { protagonist, loveInterest, trope }
+  is_public boolean default false,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- Create chapters table
+create table if not exists chapters (
+  id uuid default gen_random_uuid() primary key,
+  novel_id uuid references novels(id) on delete cascade not null,
+  chapter_index integer not null,
+  title text not null,
+  content text not null,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- Create characters table
+create table if not exists characters (
+  id uuid default gen_random_uuid() primary key,
+  novel_id uuid references novels(id) on delete cascade not null,
+  name text not null,
+  role text, -- Protagonist, Antagonist, Supporting
+  status text default 'Alive', -- Alive, Dead, Missing
+  attributes jsonb default '{}', -- { identity: "...", ability: "..." }
+  description text,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- Create memories table (for RAG and summaries)
+create table if not exists memories (
+  id uuid default gen_random_uuid() primary key,
+  novel_id uuid references novels(id) on delete cascade not null,
+  content text not null,
+  type text default 'event', -- 'summary', 'event', 'fact'
+  is_active boolean default true,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- Enable RLS (Row Level Security)
+alter table novels enable row level security;
+alter table chapters enable row level security;
+alter table characters enable row level security;
+alter table memories enable row level security;
+alter table profiles enable row level security;
+
+-- Policies (Simplified for demo: Allow everything for productive_v1)
+create policy "Allow all for productive_v1 novels" on novels for all using (owner_id = 'productive_v1');
+create policy "Allow all for productive_v1 chapters" on chapters for all using (true);
+create policy "Allow all for productive_v1 characters" on characters for all using (true);
+create policy "Allow all for productive_v1 memories" on memories for all using (true);
+create policy "Allow all for productive_v1 profiles" on profiles for all using (id = 'productive_v1');
