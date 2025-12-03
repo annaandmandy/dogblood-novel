@@ -4,28 +4,7 @@ import { ChevronLeft, Info, Settings, Share, BookOpen, X, Trash2, Plus, Edit2, A
 import { supabase } from '../lib/supabase';
 import { generateNextChapter } from '../lib/gemini';
 
-// Helper to split text into pages
-const splitTextIntoPages = (text, charsPerPage = 500) => {
-    if (!text) return [];
-    const pages = [];
-    let currentIndex = 0;
-    while (currentIndex < text.length) {
-        let endIndex = currentIndex + charsPerPage;
-        if (endIndex < text.length) {
-            const nextNewLine = text.indexOf('\n', endIndex);
-            const nextPeriod = text.indexOf('。', endIndex);
 
-            if (nextNewLine !== -1 && nextNewLine - endIndex < 100) {
-                endIndex = nextNewLine + 1;
-            } else if (nextPeriod !== -1 && nextPeriod - endIndex < 50) {
-                endIndex = nextPeriod + 1;
-            }
-        }
-        pages.push(text.slice(currentIndex, endIndex));
-        currentIndex = endIndex;
-    }
-    return pages;
-};
 
 const THEMES = {
     dark: { bg: 'bg-slate-950', text: 'text-slate-300', ui: 'bg-slate-900', border: 'border-slate-800' },
@@ -40,6 +19,15 @@ export default function Reader() {
     const [chapters, setChapters] = useState([]);
     const [currentChapterIndex, setCurrentChapterIndex] = useState(0);
     const [currentPageIndex, setCurrentPageIndex] = useState(0);
+    const [totalPages, setTotalPages] = useState(1);
+    const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+    const contentRef = useRef(null);
+
+    useEffect(() => {
+        const handleResize = () => setWindowWidth(window.innerWidth);
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
 
     const [showMenu, setShowMenu] = useState(false);
     const [showWiki, setShowWiki] = useState(false);
@@ -75,6 +63,27 @@ export default function Reader() {
         }, 1000); // Save after 1 second of no changes
         return () => clearTimeout(timer);
     }, [currentChapterIndex, currentPageIndex, novel]);
+
+    // Measure pages effect
+    useEffect(() => {
+        if (!contentRef.current || !chapters[currentChapterIndex]) return;
+
+        // Small timeout to ensure render is complete
+        const timer = setTimeout(() => {
+            if (!contentRef.current) return;
+            const { scrollWidth, clientWidth } = contentRef.current;
+            const gap = 48;
+            const pages = Math.ceil(scrollWidth / (clientWidth + gap));
+            setTotalPages(pages || 1);
+
+            // Adjust current page if out of bounds after resize
+            if (currentPageIndex >= pages) {
+                setCurrentPageIndex(Math.max(0, pages - 1));
+            }
+        }, 100);
+
+        return () => clearTimeout(timer);
+    }, [chapters, currentChapterIndex, windowWidth, preferences.fontSize]);
 
     // Auto-generation Effect
     useEffect(() => {
@@ -294,19 +303,13 @@ export default function Reader() {
 
     // Pagination Logic
     const currentChapter = chapters[currentChapterIndex];
-    const charsPerPage = useMemo(() => {
-        const ratio = 18 / preferences.fontSize;
-        return Math.floor(500 * ratio);
-    }, [preferences.fontSize]);
-
-    const pages = useMemo(() => currentChapter ? splitTextIntoPages(currentChapter.content, charsPerPage) : [], [currentChapter, charsPerPage]);
 
     const handlePageClick = (e) => {
         const width = window.innerWidth;
         const clickX = e.clientX;
 
         if (clickX > width * 0.7) {
-            if (currentPageIndex < pages.length - 1) {
+            if (currentPageIndex < totalPages - 1) {
                 setCurrentPageIndex(prev => prev + 1);
             } else if (currentChapterIndex < chapters.length - 1) {
                 setCurrentChapterIndex(prev => prev + 1);
@@ -385,7 +388,7 @@ export default function Reader() {
     if (!novel || !currentChapter) return <div className="h-screen flex items-center justify-center text-slate-500">無內容</div>;
 
     return (
-        <div className={`h-screen ${theme.bg} ${theme.text} ${preferences.fontFamily} leading-relaxed relative overflow-hidden flex flex-col transition-colors duration-300`}>
+        <div className={`h-[100dvh] ${theme.bg} ${theme.text} ${preferences.fontFamily} leading-relaxed relative overflow-hidden flex flex-col transition-colors duration-300`}>
 
             {/* Header Info (Top Right) */}
             <div className="absolute top-4 right-6 z-10 opacity-50 text-xs font-medium pointer-events-none">
@@ -397,22 +400,34 @@ export default function Reader() {
                 onClick={handlePageClick}
                 className="flex-1 px-6 py-12 md:p-12 max-w-3xl mx-auto w-full cursor-pointer flex flex-col transition-all duration-300"
             >
-                <div className="flex-1 flex flex-col">
-                    {currentPageIndex === 0 && (
-                        <h2 className="text-2xl font-bold mb-6 opacity-90">{currentChapter.title}</h2>
-                    )}
-                    <p
-                        className="whitespace-pre-line text-justify min-h-[60vh]"
-                        style={{ fontSize: `${preferences.fontSize}px`, lineHeight: '1.8' }}
+                <div className="flex-1 relative overflow-hidden">
+                    <div
+                        ref={contentRef}
+                        className="h-full absolute inset-0 transition-transform duration-300 ease-out"
+                        style={{
+                            columnWidth: `${windowWidth < 768 ? windowWidth - 48 : 768 - 96}px`, // Container width - padding
+                            columnGap: '48px', // Matches padding
+                            columnFill: 'auto',
+                            width: '100%',
+                            transform: `translateX(calc(-${currentPageIndex} * (100% + 48px)))`
+                        }}
                     >
-                        {pages[currentPageIndex]}
-                    </p>
+                        {currentPageIndex === 0 && (
+                            <h2 className="text-2xl font-bold mb-6 opacity-90 inline-block w-full">{currentChapter.title}</h2>
+                        )}
+                        <p
+                            className="whitespace-pre-line text-justify inline"
+                            style={{ fontSize: `${preferences.fontSize}px`, lineHeight: '1.8' }}
+                        >
+                            {currentChapter.content?.trim()}
+                        </p>
+                    </div>
                 </div>
 
                 {/* Footer Info */}
                 <div className="h-8 flex items-center justify-between text-[10px] opacity-40 mt-4 border-t border-current pt-2">
                     <span>第 {currentChapter.chapter_index} 章</span>
-                    <span>{Math.round(((currentPageIndex + 1) / pages.length) * 100)}%</span>
+                    <span>{Math.round(((currentPageIndex + 1) / totalPages) * 100)}%</span>
                 </div>
             </div>
 
@@ -423,7 +438,7 @@ export default function Reader() {
                     <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setShowMenu(false)} />
 
                     {/* Sidebar Panel (Left on Desktop, Bottom on Mobile) */}
-                    <div className={`relative flex flex-col ${theme.ui} ${theme.text} w-full md:w-80 md:h-full h-auto mt-auto md:mt-0 shadow-2xl transition-transform`}>
+                    <div className={`relative flex flex-col ${theme.ui} ${theme.text} w-full md:w-80 md:h-full h-auto max-h-[85dvh] md:max-h-full mt-auto md:mt-0 shadow-2xl transition-transform rounded-t-2xl md:rounded-none`}>
 
                         {/* Menu Header */}
                         <div className={`p-4 border-b ${theme.border} flex justify-between items-center`}>
@@ -553,7 +568,7 @@ export default function Reader() {
 
             {/* Wiki Modal */}
             {showWiki && (
-                <div className={`absolute inset-0 z-50 ${theme.bg} ${theme.text} flex flex-col`}>
+                <div className={`absolute inset-0 z-50 ${theme.bg} ${theme.text} flex flex-col pt-12 md:pt-0`}>
                     <div className={`flex justify-between items-center p-4 border-b ${theme.border}`}>
                         <h2 className="text-lg font-bold">Wiki 資料庫</h2>
                         <button onClick={() => setShowWiki(false)} className={`p-2 rounded-full ${theme.ui}`}><X size={20} /></button>
