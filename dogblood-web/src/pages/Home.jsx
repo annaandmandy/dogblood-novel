@@ -99,9 +99,16 @@ export default function Home() {
                         </div>
 
                         <div className="absolute inset-0 p-4 flex flex-col justify-end bg-gradient-to-t from-black/90 via-black/40 to-transparent">
-                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded w-fit mb-2 backdrop-blur-sm border border-white/10 ${novel.genre === 'BL' ? 'bg-purple-500/20 text-purple-200' : 'bg-rose-500/20 text-rose-200'}`}>
-                                {novel.genre}
-                            </span>
+                            <div className="flex flex-wrap gap-1 mb-2">
+                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded backdrop-blur-sm border border-white/10 ${novel.genre === 'BL' ? 'bg-purple-500/20 text-purple-200' : 'bg-rose-500/20 text-rose-200'}`}>
+                                    {novel.genre}
+                                </span>
+                                {novel.tags && novel.tags.slice(0, 2).map((tag, i) => (
+                                    <span key={i} className="text-[10px] px-1.5 py-0.5 rounded bg-white/10 backdrop-blur-sm border border-white/5 text-slate-200">
+                                        {tag}
+                                    </span>
+                                ))}
+                            </div>
                             <h3 className="font-bold text-lg leading-tight mb-1 line-clamp-2">{novel.title}</h3>
                             <p className="text-xs text-slate-300 line-clamp-2 opacity-80">{novel.summary || novel.settings?.trope}</p>
                         </div>
