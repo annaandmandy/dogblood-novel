@@ -180,9 +180,9 @@ const callOpenRouterPipeline = async (systemPrompt, userPrompt) => {
 };
 
 // ==========================================
-// 1. 生成初始設定 (已更新：接收 targetChapterCount)
+// 1. 生成初始設定 (已更新：接收 targetChapterCount, category)
 // ==========================================
-export const generateRandomSettings = async (genre, tags = [], tone = "一般", targetChapterCount = null) => {
+export const generateRandomSettings = async (genre, tags = [], tone = "一般", targetChapterCount = null, category = "BG") => {
     const model = getGeminiModel(true);
     const toneDesc = getToneInstruction(tone);
     const styleGuide = `風格標籤：${tags.join('、')}。\n${toneDesc}`;
@@ -192,13 +192,16 @@ export const generateRandomSettings = async (genre, tags = [], tone = "一般", 
 
     const prompt = `
     請為「${genre}」小說生成一套具備爆款潛力的原創設定。
+    **類別**：${category} (請務必根據此類別設定主角與對象的性別。例如 BL 為雙男主，BG 為一男一女，GL 為雙女主)。
     **預計篇幅：${totalChapters} 章** (這是一個長篇故事，請據此規劃格局)。
     ${styleGuide}
     
     【嚴格要求】
     1. **絕對原創**：禁止使用現有知名作品人名。
-    2. **深度人設**：請為主角和核心對象設計完整的「人物冰山檔案」，包含生平、陰影、慾望。
-    3. **宏觀設計圖**：請根據 ${totalChapters} 章的篇幅，規劃好「終極目標」與「世界真相」。如果是長篇，格局要夠大。
+    2. **純中文命名**：角色名稱必須是**純中文**，**絕對禁止**附帶拼音、英文或括號備註（例如：禁止 "林秋 (Lin Qiu)"，只能 "林秋"）。
+    3. **深度人設**：請為主角和核心對象設計完整的「人物冰山檔案」，包含生平、陰影、慾望。
+    4. **宏觀設計圖**：請根據 ${totalChapters} 章的篇幅，規劃好「終極目標」與「世界真相」。如果是長篇，格局要夠大。
+    5. **人物隱性立體化**：請為主角與攻略對象各增加一份「hidden_profile」，用於提升角色深度。這些元素不是強制要在前期揭露，只作為人物厚度來源。
     
     【回傳 JSON 格式】
     {
@@ -221,7 +224,13 @@ export const generateRandomSettings = async (genre, tags = [], tone = "一般", 
             "trauma": "過去的陰影/創傷",
             "desire": "核心慾望/目標",
             "fear": "最大的恐懼",
-            "charm_point": "反差萌點/小癖好"
+            "charm_point": "反差萌點/小癖好",
+            "hidden_profile": {
+               "secret": "角色自己不願提起的祕密",
+               "fatal_flaw": "性格缺點",
+               "unspoken_desire": "深層渴望",
+               "soft_spot": "脆弱面"
+            }
         }
       },
       "loveInterest": {
@@ -229,7 +238,8 @@ export const generateRandomSettings = async (genre, tags = [], tone = "一般", 
         "role": "攻略對象/反派",
         "profile": {
             "appearance": "", "personality_surface": "", "personality_core": "", 
-            "biography": "", "trauma": "", "desire": "", "fear": "", "charm_point": ""
+            "biography": "", "trauma": "", "desire": "", "fear": "", "charm_point": "",
+            "hidden_profile": { "secret": "", "fatal_flaw": "", "unspoken_desire": "", "soft_spot": "" }
         }
       }
     }
@@ -290,12 +300,22 @@ export const generateNovelStart = async (genre, settings, tags = [], tone = "一
     【對象檔案】
     ${settings.loveInterest.name}: ${loveInterestProfile}
 
+    【鏡頭語言要求】
+    敘事時請自然融入「電影分鏡感」，包含：
+    - 光線（亮度、方向、場景氛圍）
+    - 背景聲音（人聲、風聲、電流聲或安靜）
+    - 角色微動作（手指收緊、目光移動、呼吸變化）
+    - 空氣狀態（悶、冷、潮濕、乾燥）
+    - 路人的反應與背景活動（保持世界是活的）
+    以上元素請自然出現在描寫中，不要刻意強調。
+
     【寫作要求】
     1. **字數**：1500-2000字。
     2. **黃金開篇**：衝突開場 (In Media Res)，直接切入事件。
-    3. **群像與配角**：請自然引入 1-2 位功能性配角。務必賦予配角鮮明的特徵。
+    3. **群像與配角**：拒絕免洗筷NPC。請引入 1-2 位具備「圈粉潛力」的配角。賦予他們極具辨識度的「標籤」（如：反差萌、方言口癖、獨特價值觀）。他們與主角的互動應充滿張力或趣味，讓讀者想看更多他們的戲份。
     4. **有意義的衝突**：主角遭遇的麻煩必須阻礙他的核心渴望，迫使他行動。
-    5. ${extraInstruction}
+    5. **沈浸式寫作**：請將鏡頭語言與導演指令完全內化為小說描寫。**嚴禁**在正文中出現「【鏡頭】」、「【特寫】」、「【感情線】」、「【階段】」等任何括號標記或後設說明。讀者只能看到小說故事本身。
+    6. ${extraInstruction}
 
     【回傳 JSON 格式】
     {
@@ -619,12 +639,22 @@ export const generateNextChapter = async (novelContext, previousContent, charact
     ${director.directive}
     ${endingInstruction}
     
+    【鏡頭語言要求】
+    敘事時請自然融入「電影分鏡感」，包含：
+    - 光線（亮度、方向、場景氛圍）
+    - 背景聲音（人聲、風聲、電流聲或安靜）
+    - 角色微動作（手指收緊、目光移動、呼吸變化）
+    - 空氣狀態（悶、冷、潮濕、乾燥）
+    - 路人的反應與背景活動（保持世界是活的）
+    以上元素請自然出現在描寫中，不要刻意強調。
+    
     【寫作重點】
     1. **字數**：1500-2000字。
     2. **鏡頭規則**：${pov}。鏡頭必須跟隨主角。
-    3. **群像**：請描寫配角與路人的反應，增加世界真實感。
+    3. **群像升級**：配角不是NPC，而是活生生的人。請給予在場配角（即使是路人）鮮活的靈魂。透過一句精闢的吐槽、一個下意識的動作，或對主角行為的獨特反應，展現他們的人格魅力。讓讀者覺得這個世界每個人都是主角。
     4. **角色登場邏輯**：若某個重要角色（如主角、對象、反派）在之前的劇情中未曾出現，**必須安排一個合理的出場情境**（如：偶遇、傳聞、被指派任務等），**絕對禁止憑空出現**或預設讀者已知曉該角色。
-    5. **希望**：無論過程多慘烈，結尾請留下一線希望或新的線索。
+    5. **沈浸式寫作**：請將鏡頭語言與導演指令完全內化為小說描寫。**嚴禁**在正文中出現「【鏡頭】」、「【特寫】」、「【感情線】」、「【階段】」等任何括號標記或後設說明。讀者只能看到小說故事本身。
+    6. **希望**：無論過程多慘烈，結尾請留下一線希望或新的線索。
 
     【上下文】
     記憶庫：${memText}
@@ -639,6 +669,7 @@ export const generateNextChapter = async (novelContext, previousContent, charact
          {
            "name": "角色名",
            "status": "更新狀態",
+           "description": "更新後的角色當前描述 (包含外貌變化、心理狀態)",
            "is_new": false,
            "profile_update": { "appearance": "...", "personality": "...", "biography": "...", "trauma": "..." }
          }

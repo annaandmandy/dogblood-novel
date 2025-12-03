@@ -252,7 +252,11 @@ export default function Reader() {
 
                     if (existingChar) {
                         finalName = existingChar.name; // Keep original name
-                        finalDesc = existingChar.description + (update.description_append ? ` | ${update.description_append}` : "");
+                        if (update.description) {
+                            finalDesc = update.description;
+                        } else if (update.description_append) {
+                            finalDesc = existingChar.description + (update.description_append ? ` | ${update.description_append}` : "");
+                        }
 
                         if (update.status) {
                             finalStatus = update.status;

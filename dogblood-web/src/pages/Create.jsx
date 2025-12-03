@@ -111,8 +111,8 @@ export default function Create() {
     const handleRandomize = async () => {
         setLoadingRandom(true);
         try {
-            // Updated signature: generateRandomSettings(genre, tags, tone, targetChapterCount)
-            const randomSettings = await generateRandomSettings(genre, selectedTags, tone, parseInt(targetEndingChapter));
+            // Updated signature: generateRandomSettings(genre, tags, tone, targetChapterCount, category)
+            const randomSettings = await generateRandomSettings(genre, selectedTags, tone, parseInt(targetEndingChapter), category);
 
             // Separate flat settings for UI and deep profiles for logic
             setSettings({
@@ -197,24 +197,59 @@ export default function Create() {
             if (chapterError) throw chapterError;
 
             // 4. Save Initial Characters
-            const charactersToInsert = [
-                {
-                    novel_id: novel.id,
-                    name: settings.protagonist,
-                    role: '主角',
-                    description: '本故事主角',
-                    status: 'Alive',
-                    profile: profiles.protagonist // Save deep profile
-                },
-                {
-                    novel_id: novel.id,
-                    name: settings.loveInterest,
-                    role: '對象/反派',
-                    description: '本故事重要角色',
-                    status: 'Alive',
-                    profile: profiles.loveInterest // Save deep profile
-                }
-            ];
+            // Strategy: Start with the deep profiles generated in the random step,
+            // then merge any updates from the first chapter generation.
+
+            const characterMap = new Map();
+
+            // A. Initialize with base profiles (Protagonist & Love Interest)
+            characterMap.set(settings.protagonist, {
+                novel_id: novel.id,
+                name: settings.protagonist,
+                role: '主角',
+                description: '本故事主角',
+                status: 'Alive',
+                profile: profiles.protagonist || {} // The deep profile from generateRandomSettings
+            });
+
+            characterMap.set(settings.loveInterest, {
+                novel_id: novel.id,
+                name: settings.loveInterest,
+                role: '對象/反派',
+                description: '本故事重要角色',
+                status: 'Alive',
+                profile: profiles.loveInterest || {} // The deep profile from generateRandomSettings
+            });
+
+            // B. Merge updates from Chapter 1 generation
+            if (startResponse.character_updates && startResponse.character_updates.length > 0) {
+                startResponse.character_updates.forEach(update => {
+                    const existing = characterMap.get(update.name);
+
+                    if (existing) {
+                        // Merge existing character
+                        characterMap.set(update.name, {
+                            ...existing,
+                            role: update.role || existing.role,
+                            description: update.description || existing.description,
+                            status: update.status || existing.status,
+                            profile: { ...existing.profile, ...update.profile_update } // Merge deep profile with updates
+                        });
+                    } else {
+                        // Add new character (Side characters introduced in Ch1)
+                        characterMap.set(update.name, {
+                            novel_id: novel.id,
+                            name: update.name,
+                            role: update.role || '配角',
+                            description: update.description || '新登場角色',
+                            status: update.status || 'Alive',
+                            profile: update.profile_update || {}
+                        });
+                    }
+                });
+            }
+
+            const charactersToInsert = Array.from(characterMap.values());
 
             const { error: charactersError } = await supabase
                 .from('characters')
@@ -267,6 +302,16 @@ export default function Create() {
                         >
                             <div className="text-2xl mb-1">🔮</div>
                             <div className="font-bold">BL (耽美)</div>
+                        </button>
+                        <button
+                            onClick={() => setCategory('GL')}
+                            className={`flex-1 p-4 rounded-xl border-2 text-center transition-all ${category === 'GL'
+                                ? 'border-violet-500 bg-violet-500/10 text-white shadow-[0_0_20px_rgba(139,92,246,0.2)]'
+                                : 'border-slate-800 bg-slate-900/50 text-slate-400 hover:border-slate-700'
+                                }`}
+                        >
+                            <div className="text-2xl mb-1">⚜️</div>
+                            <div className="font-bold">GL (百合)</div>
                         </button>
                     </div>
                 </section>
@@ -369,7 +414,7 @@ export default function Create() {
                     </h2>
                     <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-4">
                         <div className="flex flex-wrap gap-2 mb-4">
-                            {AVAILABLE_TAGS.map(tag => (
+                            {[...AVAILABLE_TAGS, ...selectedTags.filter(t => !AVAILABLE_TAGS.includes(t))].map(tag => (
                                 <button
                                     key={tag}
                                     onClick={() => toggleTag(tag)}
