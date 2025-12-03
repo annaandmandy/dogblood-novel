@@ -26,6 +26,15 @@ export default function Create() {
         summary: ''
     });
 
+    // Store deep character profiles (hidden from simple UI but used for generation)
+    const [profiles, setProfiles] = useState({
+        protagonist: {},
+        loveInterest: {}
+    });
+
+    const [designBlueprint, setDesignBlueprint] = useState({});
+    const [targetEndingChapter, setTargetEndingChapter] = useState(120);
+
     const [loading, setLoading] = useState(false);
     const [loadingRandom, setLoadingRandom] = useState(false);
     const [customTag, setCustomTag] = useState('');
@@ -104,7 +113,25 @@ export default function Create() {
         try {
             // Updated signature: generateRandomSettings(genre, tags, tone)
             const randomSettings = await generateRandomSettings(genre, selectedTags, tone);
-            setSettings(randomSettings);
+
+            // Separate flat settings for UI and deep profiles for logic
+            setSettings({
+                title: randomSettings.title,
+                protagonist: randomSettings.protagonist.name,
+                loveInterest: randomSettings.loveInterest.name,
+                trope: randomSettings.trope,
+                summary: randomSettings.summary
+            });
+
+            setProfiles({
+                protagonist: randomSettings.protagonist.profile,
+                loveInterest: randomSettings.loveInterest.profile
+            });
+
+            if (randomSettings.design_blueprint) {
+                setDesignBlueprint(randomSettings.design_blueprint);
+            }
+
         } catch (error) {
             console.error(error);
             alert('隨機生成失敗，請重試。');
@@ -122,9 +149,19 @@ export default function Create() {
         setLoading(true);
         try {
             // 1. Generate Content
+            // Construct full settings object with profiles for the AI
+            // 1. Generate Content
+            // Construct full settings object with profiles for the AI
+            const apiSettings = {
+                ...settings,
+                design_blueprint: designBlueprint,
+                protagonist: { name: settings.protagonist, role: '主角', profile: profiles.protagonist },
+                loveInterest: { name: settings.loveInterest, role: '對象/反派', profile: profiles.loveInterest }
+            };
+
             // Updated signature: generateNovelStart(genre, settings, tags, tone, pov)
             // Note: We must pass the specific genre (e.g. '無限流') not the category ('BG')
-            const content = await generateNovelStart(genre, settings, selectedTags, tone, pov);
+            const content = await generateNovelStart(genre, apiSettings, selectedTags, tone, pov);
 
             // 2. Save Novel to Supabase
             const { data: novel, error: novelError } = await supabase
@@ -134,8 +171,9 @@ export default function Create() {
                     title: settings.title,
                     genre: genre, // Save specific genre (e.g. '無限流') so gemini.js works correctly
                     summary: settings.summary || settings.trope,
-                    settings: { ...settings, tone, pov, category }, // Save category in settings if needed
+                    settings: { ...settings, tone, pov, category, design_blueprint: designBlueprint }, // Save category and blueprint in settings
                     tags: selectedTags,
+                    target_ending_chapter: parseInt(targetEndingChapter) || 120,
                     is_public: false
                 })
                 .select()
@@ -162,14 +200,16 @@ export default function Create() {
                     name: settings.protagonist,
                     role: '主角',
                     description: '本故事主角',
-                    status: 'Alive'
+                    status: 'Alive',
+                    profile: profiles.protagonist // Save deep profile
                 },
                 {
                     novel_id: novel.id,
                     name: settings.loveInterest,
                     role: '對象/反派',
                     description: '本故事重要角色',
-                    status: 'Alive'
+                    status: 'Alive',
+                    profile: profiles.loveInterest // Save deep profile
                 }
             ];
 
@@ -414,6 +454,21 @@ export default function Create() {
                             placeholder="劇情摘要 (至少 150 字，將顯示在圖書館)"
                             className="w-full bg-slate-900 border border-slate-800 rounded-lg px-4 py-3 h-32 resize-none focus:outline-none focus:border-purple-500 transition-colors text-sm"
                         />
+
+                        <div className="flex items-center gap-4 bg-slate-900/50 p-4 rounded-lg border border-slate-800">
+                            <div className="flex-1">
+                                <label className="block text-sm font-medium text-slate-300 mb-1">預計完結章節數</label>
+                                <div className="text-xs text-slate-500">AI 將根據此長度規劃三幕劇節奏 (預設 120)</div>
+                            </div>
+                            <input
+                                type="number"
+                                value={targetEndingChapter}
+                                onChange={(e) => setTargetEndingChapter(e.target.value)}
+                                min="20"
+                                max="500"
+                                className="w-24 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-center focus:outline-none focus:border-purple-500"
+                            />
+                        </div>
                     </div>
                 </section>
             </div>

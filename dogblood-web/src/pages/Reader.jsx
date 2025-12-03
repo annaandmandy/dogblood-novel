@@ -247,6 +247,7 @@ export default function Reader() {
                     let finalStatus = update.status || 'Alive';
                     let finalDesc = update.description || update.description_append || "新登場角色";
                     let finalName = update.name;
+                    let finalProfile = update.profile_update || {};
 
                     if (existingChar) {
                         finalName = existingChar.name; // Keep original name
@@ -257,6 +258,13 @@ export default function Reader() {
                         } else {
                             finalStatus = existingChar.status;
                         }
+
+                        // Merge profile updates if any
+                        if (update.profile_update) {
+                            finalProfile = { ...(existingChar.profile || {}), ...update.profile_update };
+                        } else {
+                            finalProfile = existingChar.profile || {};
+                        }
                     }
 
                     updates.push(
@@ -265,7 +273,8 @@ export default function Reader() {
                             name: finalName,
                             role: existingChar ? existingChar.role : '配角',
                             status: finalStatus,
-                            description: finalDesc
+                            description: finalDesc,
+                            profile: finalProfile
                         }, { onConflict: 'novel_id,name' }) // Ensure no spaces in column list
                             .then(({ error }) => {
                                 if (error) throw error;
@@ -277,7 +286,8 @@ export default function Reader() {
                                     const { error: updateError } = await supabase.from('characters')
                                         .update({
                                             status: finalStatus,
-                                            description: finalDesc
+                                            description: finalDesc,
+                                            profile: finalProfile
                                         })
                                         .eq('novel_id', novel.id)
                                         .eq('name', finalName);

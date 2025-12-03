@@ -90,3 +90,6 @@ alter table novels add column if not exists target_ending_chapter integer;
 
 -- Add tags to novels table
 alter table novels add column if not exists tags text[];
+
+-- Add profile to characters table (for deep character settings)
+alter table characters add column if not exists profile jsonb default '{}';
