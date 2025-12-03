@@ -87,3 +87,6 @@ create policy "Allow all for productive_v1 progress" on reading_progress for all
 
 -- Add target_ending_chapter to novels table
 alter table novels add column if not exists target_ending_chapter integer;
+
+-- Add tags to novels table
+alter table novels add column if not exists tags text[];

@@ -16,6 +16,34 @@ export default function Create() {
         trope: '',
         summary: ''
     });
+    const [selectedTags, setSelectedTags] = useState([]);
+    const [customTag, setCustomTag] = useState('');
+
+    const AVAILABLE_TAGS = ["傻白甜", "虐戀", "爽文", "現代", "古代", "霸總", "校園", "懸疑", "重生", "系統", "救贖", "無限流", "推理"];
+
+    const toggleTag = (tag) => {
+        if (selectedTags.includes(tag)) {
+            setSelectedTags(prev => prev.filter(t => t !== tag));
+        } else {
+            if (selectedTags.length >= 3) {
+                alert("最多選擇 3 個標籤");
+                return;
+            }
+            setSelectedTags(prev => [...prev, tag]);
+        }
+    };
+
+    const addCustomTag = () => {
+        if (!customTag.trim()) return;
+        if (selectedTags.length >= 3) {
+            alert("最多選擇 3 個標籤");
+            return;
+        }
+        if (!selectedTags.includes(customTag.trim())) {
+            setSelectedTags(prev => [...prev, customTag.trim()]);
+        }
+        setCustomTag('');
+    };
 
     const handleInputChange = (e) => {
         const { name, value } = e.target;
@@ -25,7 +53,7 @@ export default function Create() {
     const handleRandomize = async () => {
         setLoadingRandom(true);
         try {
-            const randomSettings = await generateRandomSettings(genre);
+            const randomSettings = await generateRandomSettings(genre, selectedTags);
             setSettings(randomSettings);
         } catch (error) {
             console.error(error);
@@ -44,7 +72,7 @@ export default function Create() {
         setLoading(true);
         try {
             // 1. Generate Content
-            const content = await generateNovelStart(genre, settings);
+            const content = await generateNovelStart(genre, settings, selectedTags);
 
             // 2. Save Novel to Supabase
             const { data: novel, error: novelError } = await supabase
@@ -55,6 +83,7 @@ export default function Create() {
                     genre: genre,
                     summary: settings.summary || settings.trope,
                     settings: settings,
+                    tags: selectedTags,
                     is_public: false
                 })
                 .select()
@@ -140,6 +169,52 @@ export default function Create() {
                             <div className="text-2xl mb-2">🔮</div>
                             <div className="font-bold text-lg">BL (耽美)</div>
                             <div className="text-xs text-slate-400 mt-1">救贖、虐戀、強強</div>
+                        </button>
+                    </div>
+                </section>
+
+                {/* Tags Selection */}
+                <section>
+                    <h2 className="text-lg font-medium text-slate-300 mb-4">風格標籤 (最多 3 個)</h2>
+                    <div className="flex flex-wrap gap-2 mb-3">
+                        {/* Display Predefined Tags */}
+                        {AVAILABLE_TAGS.map(tag => (
+                            <button
+                                key={tag}
+                                onClick={() => toggleTag(tag)}
+                                className={`px-3 py-1.5 rounded-full text-sm border transition-all ${selectedTags.includes(tag)
+                                    ? 'bg-purple-600 border-purple-600 text-white'
+                                    : 'bg-slate-900 border-slate-700 text-slate-400 hover:border-slate-500'
+                                    }`}
+                            >
+                                {tag}
+                            </button>
+                        ))}
+                        {/* Display Custom Tags that are NOT in AVAILABLE_TAGS */}
+                        {selectedTags.filter(t => !AVAILABLE_TAGS.includes(t)).map(tag => (
+                            <button
+                                key={tag}
+                                onClick={() => toggleTag(tag)}
+                                className="px-3 py-1.5 rounded-full text-sm border transition-all bg-purple-600 border-purple-600 text-white flex items-center gap-1"
+                            >
+                                {tag} <span className="text-xs opacity-70">×</span>
+                            </button>
+                        ))}
+                    </div>
+                    <div className="flex gap-2">
+                        <input
+                            type="text"
+                            value={customTag}
+                            onChange={(e) => setCustomTag(e.target.value)}
+                            placeholder="自定義標籤..."
+                            className="flex-1 bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-purple-500"
+                            onKeyDown={(e) => e.key === 'Enter' && addCustomTag()}
+                        />
+                        <button
+                            onClick={addCustomTag}
+                            className="px-4 py-2 bg-slate-800 rounded-lg text-sm hover:bg-slate-700"
+                        >
+                            新增
                         </button>
                     </div>
                 </section>

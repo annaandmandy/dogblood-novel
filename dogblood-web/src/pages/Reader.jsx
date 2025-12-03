@@ -181,7 +181,8 @@ export default function Reader() {
                 },
                 lastChapter.content,
                 characters,
-                memories
+                memories,
+                novel.tags || []
             );
 
             // 2. Handle DB Updates
