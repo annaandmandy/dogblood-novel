@@ -1,0 +1,11 @@
+{
+    "name": "dogblood-novel",
+    "compatibility_date": "2024-12-04",
+    "assets": {
+        "directory": "./dist",
+        "binding": "ASSETS"
+    },
+    "observability": {
+        "enabled": true
+    }
+}
