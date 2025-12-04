@@ -8,8 +8,19 @@ import {
 import { generateRandomSettings, generateNovelStart, ensureDetailedSettings } from '../lib/gemini';
 import { supabase } from '../lib/supabase';
 
+import { useAuth } from '../contexts/AuthContext';
+
 export default function Create() {
     const navigate = useNavigate();
+    const { user } = useAuth();
+
+    React.useEffect(() => {
+        if (!user) {
+            navigate('/auth');
+        }
+    }, [user, navigate]);
+
+    if (!user) return null;
 
     // --- State Management ---
     const [category, setCategory] = useState('BG');
@@ -34,7 +45,7 @@ export default function Create() {
 
     const [designBlueprint, setDesignBlueprint] = useState({});
     const [targetEndingChapter, setTargetEndingChapter] = useState(120);
-    const [useDeepSeek, setUseDeepSeek] = useState(true); // Default to true (DeepSeek)
+    const [useDeepSeek, setUseDeepSeek] = useState(false); // Default to true (DeepSeek)
     const [lastGeneratedSettings, setLastGeneratedSettings] = useState(null); // To track if user modified settings
 
     const [loading, setLoading] = useState(false);
@@ -229,7 +240,7 @@ export default function Create() {
             const { data: novel, error: novelError } = await supabase
                 .from('novels')
                 .insert({
-                    owner_id: 'productive_v1', // Hardcoded for now
+                    owner_id: user.id,
                     title: settings.title,
                     genre: genre, // Save specific genre (e.g. '無限流') so gemini.js works correctly
                     summary: settings.summary || settings.trope,

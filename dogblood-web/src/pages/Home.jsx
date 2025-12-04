@@ -2,8 +2,10 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Plus, Search, Filter } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function Home() {
+    const { user } = useAuth();
     const [novels, setNovels] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
@@ -11,22 +13,27 @@ export default function Home() {
 
     const GENRE_OPTIONS = ['全部', '無限流', '諜戰黑道', '修仙玄幻', '末世生存', '豪門宮鬥', '都市情緣'];
 
+    const [error, setError] = useState(null);
+
     useEffect(() => {
-        fetchNovels();
-    }, []);
+        if (user) fetchNovels();
+        else setLoading(false);
+    }, [user]);
 
     const fetchNovels = async () => {
         try {
+            setError(null);
             const { data, error } = await supabase
                 .from('novels')
                 .select('*')
-                .eq('owner_id', 'productive_v1')
+                .eq('owner_id', user.id)
                 .order('created_at', { ascending: false });
 
             if (error) throw error;
             setNovels(data);
         } catch (error) {
             console.error('Error fetching novels:', error);
+            setError(error.message);
         } finally {
             setLoading(false);
         }
@@ -57,6 +64,33 @@ export default function Home() {
 
     if (loading) {
         return <div className="p-6 text-center text-slate-500">載入中...</div>;
+    }
+
+    if (error) {
+        return (
+            <div className="p-6 text-center space-y-4">
+                <div className="text-red-400">載入失敗: {error}</div>
+                <button onClick={fetchNovels} className="px-4 py-2 bg-slate-800 rounded-lg text-white hover:bg-slate-700">
+                    重試
+                </button>
+            </div>
+        );
+    }
+
+    if (!user) {
+        return (
+            <div className="flex flex-col items-center justify-center h-[80vh] p-6 space-y-6 text-center">
+                <h1 className="text-4xl font-bold bg-gradient-to-r from-purple-400 to-pink-600 bg-clip-text text-transparent">
+                    DogBlood
+                </h1>
+                <p className="text-slate-400 max-w-md">
+                    歡迎來到 DogBlood，您的 AI 輔助創作平台。登入以開始創作屬於您的狗血故事。
+                </p>
+                <Link to="/auth" className="px-8 py-3 bg-purple-600 hover:bg-purple-500 text-white rounded-full font-bold transition-all shadow-lg shadow-purple-900/20">
+                    立即開始
+                </Link>
+            </div>
+        );
     }
 
     return (

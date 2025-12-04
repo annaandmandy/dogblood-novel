@@ -6,6 +6,8 @@ import Square from './pages/Square';
 import Create from './pages/Create';
 import Reader from './pages/Reader';
 import NovelDetail from './pages/NovelDetail';
+import Auth from './pages/Auth';
+import Profile from './pages/Profile';
 
 function App() {
   return (
@@ -16,10 +18,11 @@ function App() {
           <Route path="square" element={<Square />} />
           <Route path="create" element={<Create />} />
           <Route path="novel/:id" element={<NovelDetail />} />
-          <Route path="profile" element={<div className="p-6 text-center text-slate-500">個人資料 (即將推出)</div>} />
+          <Route path="profile" element={<Profile />} />
         </Route>
         {/* Reader is outside the main layout (full screen) */}
         <Route path="/read/:id" element={<Reader />} />
+        <Route path="/auth" element={<Auth />} />
       </Routes>
     </BrowserRouter>
   );

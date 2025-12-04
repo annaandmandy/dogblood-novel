@@ -19,3 +19,8 @@
 ::-webkit-scrollbar-thumb {
   @apply bg-slate-700 rounded-full hover:bg-slate-600;
 }
+
+/* 讓 Markdown 容器裡的第一個元素不要有上方邊距 */
+.markdown-content>*:first-child {
+  margin-top: 0 !important;
+}

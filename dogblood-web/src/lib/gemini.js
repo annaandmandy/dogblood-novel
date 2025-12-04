@@ -262,7 +262,7 @@ const getGeminiModel = (jsonMode = false) => genAI.getGenerativeModel({
 // 核心 Agent 函數群
 // ==========================================
 
-const planChapter = async (director, blueprint, contextSummary, memories = [], clues = [], genre = "", tags = [], useDeepSeek = true, characters = []) => {
+const planChapter = async (director, blueprint, contextSummary, memories = [], clues = [], genre = "", tags = [], useDeepSeek = false, characters = []) => {
     const memoryList = formatMemoriesForFallback(memories, 50);
     const clueList = clues.length > 0 ? clues.map(c => `- ${c}`).join('\n') : "目前暫無明確線索";
 
@@ -413,7 +413,7 @@ const polishContent = async (draft, tone, pov) => {
 // ==========================================
 // 1. 生成初始設定 (中式題材用 DeepSeek，其他用 Gemini)
 // ==========================================
-export const generateRandomSettings = async (genre, tags = [], tone = "一般", targetChapterCount = null, category = "BG", useDeepSeek = true) => {
+export const generateRandomSettings = async (genre, tags = [], tone = "一般", targetChapterCount = null, category = "BG", useDeepSeek = false) => {
     const toneDesc = getToneInstruction(tone);
     const styleGuide = `風格標籤：${tags.join('、')}。\n${toneDesc}`;
     const totalChapters = targetChapterCount || getRecommendedTotalChapters(genre);
@@ -484,7 +484,7 @@ export const generateRandomSettings = async (genre, tags = [], tone = "一般", 
 // ==========================================
 // 1.5 補完詳細設定 (當用戶手動輸入或修改後)
 // ==========================================
-export const ensureDetailedSettings = async (genre, simpleSettings, tags = [], tone = "一般", category = "BG", useDeepSeek = true) => {
+export const ensureDetailedSettings = async (genre, simpleSettings, tags = [], tone = "一般", category = "BG", useDeepSeek = false) => {
     const toneDesc = getToneInstruction(tone);
     const styleGuide = `風格標籤：${tags.join('、')}。\n${toneDesc}`;
 
@@ -538,7 +538,7 @@ export const ensureDetailedSettings = async (genre, simpleSettings, tags = [], t
 // ==========================================
 // 1.6 補完角色設定 (Wiki 用)
 // ==========================================
-export const refineCharacterProfile = async (charInfo, novelContext, useDeepSeek = true) => {
+export const refineCharacterProfile = async (charInfo, novelContext, useDeepSeek = false) => {
     const prompt = `
     請根據用戶提供的基礎角色資訊，為小說《${novelContext.title}》完善該角色的詳細設定。
     
@@ -596,7 +596,7 @@ export const refineCharacterProfile = async (charInfo, novelContext, useDeepSeek
 // ==========================================
 // 2. 生成第一章 (中式題材用 DeepSeek，其他用 Gemini)
 // ==========================================
-export const generateNovelStart = async (genre, settings, tags = [], tone = "一般", pov = "女主", useDeepSeek = true) => {
+export const generateNovelStart = async (genre, settings, tags = [], tone = "一般", pov = "女主", useDeepSeek = false) => {
     const toneDesc = getToneInstruction(tone);
     const povDesc = getPovInstruction(pov);
     const styleGuide = `類型：${genre}\n風格標籤：${tags.join('、')}。\n${toneDesc}\n${povDesc}`;
@@ -679,27 +679,7 @@ export const generateNovelStart = async (genre, settings, tags = [], tone = "一
                 jsonResponse.content = polishedContent;
             }
 
-            // Post-processing: Finalize 'Exiting' characters to 'Retired'
-            // We append these updates to ensure the DB is updated
-            const exitingChars = characters.filter(c => c.status === 'Exiting');
-            if (exitingChars.length > 0) {
-                if (!jsonResponse.character_updates) jsonResponse.character_updates = [];
-                exitingChars.forEach(c => {
-                    // Check if AI already updated them (avoid duplicates if possible, but upsert handles it)
-                    const alreadyUpdated = jsonResponse.character_updates.find(u => u.name === c.name);
-                    if (!alreadyUpdated) {
-                        jsonResponse.character_updates.push({
-                            name: c.name,
-                            role: c.role,
-                            status: 'Retired', // Final status
-                            description_append: " (已退場)"
-                        });
-                    } else {
-                        // Force status to Retired if AI didn't
-                        alreadyUpdated.status = 'Retired';
-                    }
-                });
-            }
+
 
             return jsonResponse;
         }
@@ -860,7 +840,7 @@ const determinePlotDirectives = (currentChapterIndex, lastPlotState, genre, tags
 
 
 
-export const generateNextChapter = async (novelContext, prevText, characters = [], memories = [], clues = [], tags = [], tone = "一般", pov = "女主", lastPlotState = null, useDeepSeek = true) => {
+export const generateNextChapter = async (novelContext, prevText, characters = [], memories = [], clues = [], tags = [], tone = "一般", pov = "女主", lastPlotState = null, useDeepSeek = false) => {
     const totalChapters = novelContext.targetEndingChapter || getRecommendedTotalChapters(novelContext.genre);
 
     // 1. Director (Logic)
@@ -903,7 +883,8 @@ export const generateNextChapter = async (novelContext, prevText, characters = [
     
     【寫作重點】
     1. **字數**：3000字以上 (請務必寫長，細節要豐富)。
-    2. **嚴格執行大綱**：請完全依照【本章劇情大綱】發展劇情，不要隨意更改核心走向。
+    2. **格式要求**：文章開頭必須包含章節標題，格式為：# 第${novelContext.currentChapterIndex + 1}章：${chapterPlan ? chapterPlan.chapter_title : '標題'}
+    3. **嚴格執行大綱**：請完全依照【本章劇情大綱】發展劇情，不要隨意更改核心走向。
     3. **鏡頭規則**：${pov}。鏡頭必須跟隨主角。
     4. **群像**：請描寫配角與路人的反應，增加世界真實感。
     5. **線索**：請根據「線索庫」推進謎題。

@@ -2,7 +2,10 @@
 create table if not exists profiles (
   id text primary key,
   username text,
-  preferences jsonb default '{"fontSize": 18, "fontFamily": "font-serif", "theme": "dark"}'::jsonb
+  bio text,
+  tags text[],
+  preferences jsonb default '{"fontSize": 18, "fontFamily": "font-serif", "theme": "dark"}'::jsonb,
+  updated_at timestamp with time zone default timezone('utc'::text, now())
 );
 
 -- Insert the default user
@@ -94,6 +97,20 @@ alter table novels add column if not exists tags text[];
 
 -- Add profile to characters table (for deep character settings)
 alter table characters add column if not exists profile jsonb default '{}';
+-- Create favorites table
+create table if not exists favorites (
+  id uuid default gen_random_uuid() primary key,
+  user_id text references profiles(id) not null,
+  novel_id uuid references novels(id) on delete cascade not null,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  unique(user_id, novel_id)
+);
 
+-- Enable RLS for favorites
+alter table favorites enable row level security;
+
+-- Policies for favorites
+create policy "Users can manage their own favorites" on favorites for all using (auth.uid()::text = user_id);
+create policy "Users can view their own favorites" on favorites for select using (auth.uid()::text = user_id);
 -- Add gender to characters table
 alter table characters add column if not exists gender text;

@@ -2,25 +2,54 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft, BookOpen, Trash2, Globe, Lock, User, Heart, List, Play } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function NovelDetail() {
     const { id } = useParams();
     const navigate = useNavigate();
+    const { user } = useAuth();
     const [novel, setNovel] = useState(null);
     const [chapters, setChapters] = useState([]);
     const [characters, setCharacters] = useState([]);
     const [loading, setLoading] = useState(true);
 
     const [readingProgress, setReadingProgress] = useState(null);
+    const [isFavorite, setIsFavorite] = useState(false);
 
     useEffect(() => {
         fetchData();
+        if (user) checkFavorite();
+
         // Fetch reading progress from localStorage
         const savedProgress = localStorage.getItem(`novel_progress_${id}`);
         if (savedProgress) {
             setReadingProgress(JSON.parse(savedProgress));
         }
-    }, [id]);
+    }, [id, user]);
+
+    const checkFavorite = async () => {
+        const { data } = await supabase
+            .from('favorites')
+            .select('*')
+            .eq('user_id', user.id)
+            .eq('novel_id', id)
+            .single();
+        setIsFavorite(!!data);
+    };
+
+    const toggleFavorite = async () => {
+        if (!user) {
+            alert('請先登入');
+            return;
+        }
+        if (isFavorite) {
+            await supabase.from('favorites').delete().eq('user_id', user.id).eq('novel_id', id);
+            setIsFavorite(false);
+        } else {
+            await supabase.from('favorites').insert({ user_id: user.id, novel_id: id });
+            setIsFavorite(true);
+        }
+    };
 
     const fetchData = async () => {
         try {
@@ -116,19 +145,30 @@ export default function NovelDetail() {
                 <h1 className="text-lg font-bold truncate flex-1">{novel.title}</h1>
                 <div className="flex gap-2">
                     <button
-                        onClick={togglePublic}
-                        className={`p-2 rounded-full transition-colors ${novel.is_public ? 'bg-blue-500/20 text-blue-400' : 'bg-slate-800 text-slate-500'}`}
-                        title={novel.is_public ? "公開中" : "私密"}
+                        onClick={toggleFavorite}
+                        className={`p-2 rounded-full transition-colors ${isFavorite ? 'bg-red-500/20 text-red-400' : 'bg-slate-800 text-slate-500 hover:text-red-400'}`}
+                        title={isFavorite ? "取消收藏" : "收藏"}
                     >
-                        {novel.is_public ? <Globe size={20} /> : <Lock size={20} />}
+                        <Heart size={20} className={isFavorite ? "fill-current" : ""} />
                     </button>
-                    <button
-                        onClick={handleDelete}
-                        className="p-2 rounded-full hover:bg-red-500/20 text-slate-500 hover:text-red-400 transition-colors"
-                        title="刪除"
-                    >
-                        <Trash2 size={20} />
-                    </button>
+                    {user && user.id === novel.owner_id && (
+                        <>
+                            <button
+                                onClick={togglePublic}
+                                className={`p-2 rounded-full transition-colors ${novel.is_public ? 'bg-blue-500/20 text-blue-400' : 'bg-slate-800 text-slate-500'}`}
+                                title={novel.is_public ? "公開中" : "私密"}
+                            >
+                                {novel.is_public ? <Globe size={20} /> : <Lock size={20} />}
+                            </button>
+                            <button
+                                onClick={handleDelete}
+                                className="p-2 rounded-full hover:bg-red-500/20 text-slate-500 hover:text-red-400 transition-colors"
+                                title="刪除"
+                            >
+                                <Trash2 size={20} />
+                            </button>
+                        </>
+                    )}
                 </div>
             </header>
 

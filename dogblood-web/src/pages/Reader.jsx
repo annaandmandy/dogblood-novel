@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ChevronLeft, Info, Settings, Share, BookOpen, X, Trash2, Plus, Edit2, AlertTriangle, Type, Palette, List, ToggleLeft, ToggleRight, Save, User } from 'lucide-react';
+import { ChevronLeft, Info, Settings, Share, BookOpen, X, Trash2, Plus, Edit2, AlertTriangle, Type, Palette, List, ToggleLeft, ToggleRight, Save, User, Play, Pause, Volume2, Timer } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { useAuth } from '../contexts/AuthContext';
 import { generateNextChapter, refineCharacterProfile } from '../lib/gemini';
 import ReactMarkdown from 'react-markdown';
 
@@ -16,6 +17,7 @@ const THEMES = {
 
 export default function Reader() {
     const { id } = useParams();
+    const { user } = useAuth();
     const [novel, setNovel] = useState(null);
     const [chapters, setChapters] = useState([]);
     const [currentChapterIndex, setCurrentChapterIndex] = useState(0);
@@ -46,6 +48,131 @@ export default function Reader() {
     const [generationError, setGenerationError] = useState(null);
     const isPrefetching = useRef(false);
 
+    // TTS & Auto-Turn State
+    const [isPlaying, setIsPlaying] = useState(false);
+    const isPlayingRef = useRef(false); // Ref to track playing state for callbacks
+    const [ttsRate, setTtsRate] = useState(1);
+    const [isAutoTurning, setIsAutoTurning] = useState(false);
+    const [autoTurnInterval, setAutoTurnInterval] = useState(10); // Seconds
+    const autoTurnTimerRef = useRef(null);
+    const speechRef = useRef(null);
+
+    // Sync ref with state
+    useEffect(() => {
+        isPlayingRef.current = isPlaying;
+    }, [isPlaying]);
+
+    // Auto-Turn Logic
+    useEffect(() => {
+        if (isAutoTurning) {
+            autoTurnTimerRef.current = setInterval(() => {
+                handleNextPage();
+            }, autoTurnInterval * 1000);
+        } else {
+            clearInterval(autoTurnTimerRef.current);
+        }
+        return () => clearInterval(autoTurnTimerRef.current);
+    }, [isAutoTurning, autoTurnInterval, currentPageIndex, currentChapterIndex, totalPages]); // Dependencies to ensure fresh state
+
+    // TTS Logic
+    const toggleTTS = () => {
+        if (isPlayingRef.current) {
+            window.speechSynthesis.cancel();
+            setIsPlaying(false);
+        } else {
+            if (!contentRef.current) return;
+
+            // 1. Identify where to start
+            const elements = Array.from(contentRef.current.querySelectorAll('p, h1, h2, h3, h4, h5, h6, li, blockquote'));
+            if (elements.length === 0) return;
+
+            const containerRect = contentRef.current.parentElement.getBoundingClientRect();
+            let startIndex = 0;
+
+            // Find the first visible element
+            for (let i = 0; i < elements.length; i++) {
+                const rect = elements[i].getBoundingClientRect();
+                if (rect.right > containerRect.left + 5) {
+                    startIndex = i;
+                    break;
+                }
+            }
+
+            // 2. Queue utterances
+            setIsPlaying(true);
+
+            // Cancel any existing speech first
+            window.speechSynthesis.cancel();
+
+            for (let i = startIndex; i < elements.length; i++) {
+                const element = elements[i];
+                const text = element.textContent?.trim();
+                if (!text) continue;
+
+                // Clean text
+                const cleanText = text.replace(/[#*`]/g, '');
+                const utterance = new SpeechSynthesisUtterance(cleanText);
+                utterance.lang = 'zh-TW';
+                utterance.rate = ttsRate;
+
+                // Auto-Turn Logic on Start
+                utterance.onstart = () => {
+                    if (!isPlayingRef.current) return; // Safety check using Ref
+
+                    const rect = element.getBoundingClientRect();
+                    const container = contentRef.current?.parentElement?.getBoundingClientRect();
+
+                    if (rect && container) {
+                        // If element is mostly off-screen to the right, turn page
+                        // We check if the *start* of the element is beyond the *center* of the current view?
+                        // Or simply if it's to the right of the current viewport.
+                        // Since we are in a column layout, 'right' is the direction of next pages.
+
+                        // Note: rect.left is relative to the viewport.
+                        // container.right is the right edge of the visible area.
+                        // If element.left > container.right, it's on the next page.
+                        if (rect.left > container.right - 50) {
+                            setCurrentPageIndex(prev => prev + 1);
+                        }
+                    }
+                };
+
+                // Handle End of Queue
+                if (i === elements.length - 1) {
+                    utterance.onend = () => {
+                        setIsPlaying(false);
+                    };
+                }
+
+                // Error handling
+                utterance.onerror = (e) => {
+                    // Ignore interrupted error if we manually stopped it
+                    if (e.error === 'interrupted' && !isPlayingRef.current) return;
+
+                    console.error("TTS Error:", e);
+                    if (i === elements.length - 1) setIsPlaying(false);
+                };
+
+                window.speechSynthesis.speak(utterance);
+            }
+        }
+    };
+
+    // Stop TTS on unmount or chapter change
+    useEffect(() => {
+        return () => {
+            window.speechSynthesis.cancel();
+        };
+    }, []);
+
+    useEffect(() => {
+        if (isPlaying) {
+            // Restart TTS if chapter changes while playing (optional, or just stop)
+            window.speechSynthesis.cancel();
+            setIsPlaying(false);
+        }
+    }, [currentChapterIndex]);
+
     // User Settings
     const [preferences, setPreferences] = useState({
         fontSize: 18,
@@ -58,10 +185,12 @@ export default function Reader() {
     const [memories, setMemories] = useState([]);
 
     useEffect(() => {
-        fetchNovelData();
-        fetchUserProfile();
-        fetchReadingProgress();
-    }, [id]);
+        if (user) {
+            fetchNovelData();
+            fetchUserProfile();
+            fetchReadingProgress();
+        }
+    }, [id, user]);
 
     // Save Progress Effect (Debounced)
     useEffect(() => {
@@ -76,19 +205,30 @@ export default function Reader() {
     useEffect(() => {
         if (!contentRef.current || !chapters[currentChapterIndex]) return;
 
-        // Small timeout to ensure render is complete
+        // 給瀏覽器一點時間渲染樣式 (例如 margin 生效)
         const timer = setTimeout(() => {
             if (!contentRef.current) return;
+
             const { scrollWidth, clientWidth } = contentRef.current;
-            const gap = 48;
-            const pages = Math.ceil(scrollWidth / (clientWidth + gap));
+            const gap = 48; // 必須跟你 style 裡的 columnGap 一樣
+            const stride = clientWidth + gap;
+
+            // 【關鍵修正】
+            // 有時候內容只超出一點點 (例如 0.5px)，瀏覽器會把它算成新的一欄，
+            // 但 Math.ceil 如果沒有緩衝可能會少算。
+            // 我們加上 20px 的緩衝，確保只要有內容溢出，就多算一頁。
+            const safeScrollWidth = scrollWidth + 40;
+
+            const pages = Math.ceil(safeScrollWidth / stride);
+
+            // 確保至少有一頁
             setTotalPages(pages || 1);
 
-            // Adjust current page if out of bounds after resize
+            // 如果視窗大小改變導致頁數變少，修正當前頁碼防止卡在空白頁
             if (currentPageIndex >= pages) {
                 setCurrentPageIndex(Math.max(0, pages - 1));
             }
-        }, 100);
+        }, 150); // 稍微延長一點時間到 150ms 比較保險
 
         return () => clearTimeout(timer);
     }, [chapters, currentChapterIndex, windowWidth, preferences.fontSize]);
@@ -97,6 +237,9 @@ export default function Reader() {
     useEffect(() => {
         if (!novel || chapters.length === 0) return;
         if (generationError) return; // Stop auto-generation on error
+
+        // Only owner can generate new chapters
+        if (!user || user.id !== novel.owner_id) return;
 
         const checkAndGenerate = async () => {
             // If we are close to the end (within 5 chapters), generate more
@@ -109,7 +252,8 @@ export default function Reader() {
     }, [currentChapterIndex, chapters.length, novel, generating, generationError]);
 
     const fetchUserProfile = async () => {
-        const { data } = await supabase.from('profiles').select('preferences').eq('id', 'productive_v1').single();
+        if (!user) return;
+        const { data } = await supabase.from('profiles').select('preferences').eq('id', user.id).single();
         if (data?.preferences) {
             setPreferences(data.preferences);
         }
@@ -117,7 +261,7 @@ export default function Reader() {
 
     const savePreferences = async (newPrefs) => {
         setPreferences(newPrefs);
-        await supabase.from('profiles').update({ preferences: newPrefs }).eq('id', 'productive_v1');
+        await supabase.from('profiles').update({ preferences: newPrefs }).eq('id', user.id);
     };
 
     const fetchNovelData = async () => {
@@ -159,7 +303,7 @@ export default function Reader() {
             .from('reading_progress')
             .select('*')
             .eq('novel_id', id)
-            .eq('user_id', 'productive_v1')
+            .eq('user_id', user.id)
             .single();
 
         if (data) {
@@ -173,7 +317,7 @@ export default function Reader() {
         const { error } = await supabase
             .from('reading_progress')
             .upsert({
-                user_id: 'productive_v1',
+                user_id: user.id,
                 novel_id: id,
                 last_chapter_index: currentChapterIndex,
                 last_page_index: currentPageIndex,
@@ -623,16 +767,35 @@ export default function Reader() {
                             transform: `translateX(calc(-${currentPageIndex} * (100% + 48px)))`
                         }}
                     >
-                        {currentPageIndex === 0 && (
-                            <h2 className="text-2xl font-bold mb-6 opacity-90 inline-block w-full">{currentChapter.title}</h2>
-                        )}
-                        <div style={{ fontSize: `${preferences.fontSize}px`, lineHeight: '1.8' }}>
+                        <div className="markdown-content" style={{ fontSize: `${preferences.fontSize}px`, lineHeight: '1.8' }}>
                             <ReactMarkdown
                                 components={{
-                                    p: ({ node, ...props }) => <p className="mb-4 text-justify whitespace-pre-wrap" {...props} />,
-                                    h1: ({ node, ...props }) => <h1 className="text-xl font-bold mt-6 mb-4" {...props} />,
-                                    h2: ({ node, ...props }) => <h2 className="text-lg font-bold mt-5 mb-3" {...props} />,
-                                    h3: ({ node, ...props }) => <h3 className="text-base font-bold mt-4 mb-2" {...props} />,
+                                    // 1. 處理段落：最安全的設定
+                                    p: ({ node, ...props }) => (
+                                        <p className="mb-4 text-justify whitespace-pre-wrap break-inside-auto block" {...props} />
+                                    ),
+
+                                    // 2. 處理 H1/H2/H3 (## 符號)
+                                    // 關鍵修改：
+                                    // - 移除 'break-after-avoid'：雖然這可能讓標題單獨留在頁尾，但為了「不讓字消失」，這是必要的犧牲。
+                                    // - 確保 'w-full block'：明確佔位。
+                                    // - 減少 'mt' (margin-top)：減少擠壓。
+                                    h1: ({ node, ...props }) => <h1 className="text-xl font-bold mt-4 mb-2 w-full block break-inside-auto leading-snug" {...props} />,
+                                    h2: ({ node, ...props }) => <h2 className="text-lg font-bold mt-4 mb-2 w-full block break-inside-auto leading-snug" {...props} />,
+                                    h3: ({ node, ...props }) => <h3 className="text-base font-bold mt-3 mb-1 w-full block break-inside-auto leading-snug" {...props} />,
+
+                                    // 3. 處理 HR (*** 符號) - 這是重點！
+                                    // 瀏覽器原生的 <hr> 在 column layout 常常壞掉。
+                                    // 我們改用一個普通的 <div> 來模擬線條，這樣最穩定。
+                                    hr: ({ node, ...props }) => (
+                                        <div className="w-full py-4 break-inside-auto">
+                                            <div className="w-full border-t border-current opacity-20"></div>
+                                        </div>
+                                    ),
+
+                                    // 4. 其他元素保持簡單
+                                    li: ({ node, ...props }) => <li className="ml-4 list-disc break-inside-auto" {...props} />,
+                                    blockquote: ({ node, ...props }) => <blockquote className="border-l-4 border-purple-500 pl-4 py-1 my-2 italic opacity-80" {...props} />,
                                     strong: ({ node, ...props }) => <strong className="font-bold opacity-100" {...props} />,
                                     em: ({ node, ...props }) => <em className="italic opacity-90" {...props} />,
                                 }}
@@ -648,6 +811,11 @@ export default function Reader() {
                                     }
                                     // Fix: Ensure literal \n strings are converted to newlines if escaped
                                     text = text.replace(/\\n/g, '\n');
+
+                                    // We rely on CSS columns now, so we can keep headers.
+                                    // Just ensure they don't have excessive margins that push content out of flow weirdly.
+                                    // But standard markdown should be fine with column-break-inside: avoid;
+
                                     return text;
                                 })()}
                             </ReactMarkdown>
@@ -694,63 +862,142 @@ export default function Reader() {
                             </section>
 
                             {/* AI Model Selection */}
+                            {user && user.id === novel.owner_id && (
+                                <>
+                                    <section>
+                                        <h4 className="text-xs font-bold opacity-50 mb-3 uppercase tracking-wider">AI 模型</h4>
+                                        <div className={`p-4 rounded-lg border ${theme.border} flex items-center justify-between`}>
+                                            <div className="flex items-center gap-2">
+                                                <span className={`text-sm font-bold ${useDeepSeek ? 'text-blue-500' : 'opacity-50'}`}>DeepSeek V3</span>
+                                                <span className="text-xs opacity-50">vs</span>
+                                                <span className={`text-sm font-bold ${!useDeepSeek ? 'text-purple-500' : 'opacity-50'}`}>Gemini 2.0</span>
+                                            </div>
+                                            <button
+                                                onClick={async () => {
+                                                    const newVal = !useDeepSeek;
+                                                    setUseDeepSeek(newVal);
+                                                    // Persist setting
+                                                    await supabase.from('novels').update({
+                                                        settings: { ...novel.settings, useDeepSeek: newVal }
+                                                    }).eq('id', novel.id);
+                                                }}
+                                                className={`relative w-12 h-6 rounded-full transition-colors duration-300 ${useDeepSeek ? 'bg-blue-600' : 'bg-purple-600'}`}
+                                            >
+                                                <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform duration-300 ${useDeepSeek ? 'left-1' : 'translate-x-7 left-0'}`} />
+                                            </button>
+                                        </div>
+                                        <p className="text-[10px] opacity-50 mt-2 px-1">
+                                            {useDeepSeek ? "DeepSeek: 擅長中式網文邏輯與情節策劃。" : "Gemini: 擅長擴寫與潤色，速度較快。"}
+                                        </p>
+                                    </section>
+                                </>
+                            )}
+
+
+                            {/* TTS & Auto-Turn */}
                             <section>
-                                <h4 className="text-xs font-bold opacity-50 mb-3 uppercase tracking-wider">AI 模型</h4>
-                                <div className={`p-4 rounded-lg border ${theme.border} flex items-center justify-between`}>
-                                    <div className="flex items-center gap-2">
-                                        <span className={`text-sm font-bold ${useDeepSeek ? 'text-blue-500' : 'opacity-50'}`}>DeepSeek V3</span>
-                                        <span className="text-xs opacity-50">vs</span>
-                                        <span className={`text-sm font-bold ${!useDeepSeek ? 'text-purple-500' : 'opacity-50'}`}>Gemini 2.0</span>
+                                <h4 className="text-xs font-bold opacity-50 mb-3 uppercase tracking-wider">聽書與自動翻頁</h4>
+                                <div className={`p-4 rounded-lg border ${theme.border} space-y-4`}>
+
+                                    {/* TTS Controls */}
+                                    <div>
+                                        <div className="flex justify-between items-center mb-2">
+                                            <span className="text-xs font-bold flex items-center gap-2"><Volume2 size={14} /> 語音朗讀</span>
+                                            <button
+                                                onClick={toggleTTS}
+                                                className={`p-2 rounded-full ${isPlaying ? 'bg-purple-600 text-white' : 'bg-slate-700/50'}`}
+                                            >
+                                                {isPlaying ? <Pause size={16} fill="currentColor" /> : <Play size={16} fill="currentColor" />}
+                                            </button>
+                                        </div>
+                                        {isPlaying && (
+                                            <div className="flex items-center gap-2 text-xs">
+                                                <span>速度</span>
+                                                <input
+                                                    type="range" min="0.5" max="2" step="0.1"
+                                                    value={ttsRate}
+                                                    onChange={(e) => {
+                                                        const val = parseFloat(e.target.value);
+                                                        setTtsRate(val);
+                                                        // Real-time update requires restart, simpler to just update state for next play or complex handling. 
+                                                        // For V1, user needs to restart to apply speed change effectively or we implement dynamic update.
+                                                        // Dynamic update:
+                                                        if (isPlaying) {
+                                                            window.speechSynthesis.cancel();
+                                                            setTimeout(toggleTTS, 100);
+                                                        }
+                                                    }}
+                                                    className="flex-1 accent-purple-500"
+                                                />
+                                                <span>{ttsRate}x</span>
+                                            </div>
+                                        )}
                                     </div>
-                                    <button
-                                        onClick={async () => {
-                                            const newVal = !useDeepSeek;
-                                            setUseDeepSeek(newVal);
-                                            // Persist setting
-                                            await supabase.from('novels').update({
-                                                settings: { ...novel.settings, useDeepSeek: newVal }
-                                            }).eq('id', novel.id);
-                                        }}
-                                        className={`relative w-12 h-6 rounded-full transition-colors duration-300 ${useDeepSeek ? 'bg-blue-600' : 'bg-purple-600'}`}
-                                    >
-                                        <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform duration-300 ${useDeepSeek ? 'left-1' : 'translate-x-7 left-0'}`} />
-                                    </button>
+
+                                    <div className={`h-px ${theme.border} bg-current opacity-10`} />
+
+                                    {/* Auto-Turn Controls */}
+                                    <div>
+                                        <div className="flex justify-between items-center mb-2">
+                                            <span className="text-xs font-bold flex items-center gap-2"><Timer size={14} /> 自動翻頁</span>
+                                            <button
+                                                onClick={() => setIsAutoTurning(!isAutoTurning)}
+                                                className={`relative w-10 h-5 rounded-full transition-colors ${isAutoTurning ? 'bg-green-500' : 'bg-slate-700/50'}`}
+                                            >
+                                                <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-transform ${isAutoTurning ? 'left-6' : 'left-1'}`} />
+                                            </button>
+                                        </div>
+                                        {isAutoTurning && (
+                                            <div className="flex items-center gap-2 text-xs">
+                                                <span>間隔</span>
+                                                <input
+                                                    type="range" min="5" max="60" step="5"
+                                                    value={autoTurnInterval}
+                                                    onChange={(e) => setAutoTurnInterval(parseInt(e.target.value))}
+                                                    className="flex-1 accent-green-500"
+                                                />
+                                                <span>{autoTurnInterval}秒</span>
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
-                                <p className="text-[10px] opacity-50 mt-2 px-1">
-                                    {useDeepSeek ? "DeepSeek: 擅長中式網文邏輯與情節策劃。" : "Gemini: 擅長擴寫與潤色，速度較快。"}
-                                </p>
                             </section>
 
+                            {user && user.id === novel.owner_id && (
+                                <>
+                                    <section>
+                                        <h4 className="text-xs font-bold opacity-50 mb-3 uppercase tracking-wider">完結設定</h4>
+                                        <div className={`p-4 rounded-lg border ${theme.border} space-y-2`}>
+                                            <label className="text-xs opacity-70 block">預計完結章節 (目前: {chapters.length} 章)</label>
+                                            <div className="flex gap-2">
+                                                <input
+                                                    type="number"
+                                                    placeholder="無 (未設定)"
+                                                    defaultValue={novel.target_ending_chapter || ''}
+                                                    onBlur={async (e) => {
+                                                        const val = parseInt(e.target.value);
+                                                        if (!val) return;
+                                                        if (val <= chapters.length + 5) {
+                                                            alert(`完結章節必須大於目前章節 + 5 (至少 ${chapters.length + 6} 章)`);
+                                                            e.target.value = novel.target_ending_chapter || '';
+                                                            return;
+                                                        }
+                                                        const { error } = await supabase.from('novels').update({ target_ending_chapter: val }).eq('id', novel.id);
+                                                        if (!error) {
+                                                            setNovel({ ...novel, target_ending_chapter: val });
+                                                            alert(`已設定預計在第 ${val} 章完結。AI 將會開始收束劇情。`);
+                                                        }
+                                                    }}
+                                                    className={`w-full bg-transparent border ${theme.border} rounded px-3 py-2 text-sm focus:outline-none focus:border-purple-500`}
+                                                />
+                                            </div>
+                                            <p className="text-[10px] opacity-50">設定後，AI 會在接近該章節時自動收束劇情並生成結局。</p>
+                                        </div>
+                                    </section>
+                                </>
+                            )}
                             {/* Ending Settings */}
-                            <section>
-                                <h4 className="text-xs font-bold opacity-50 mb-3 uppercase tracking-wider">完結設定</h4>
-                                <div className={`p-4 rounded-lg border ${theme.border} space-y-2`}>
-                                    <label className="text-xs opacity-70 block">預計完結章節 (目前: {chapters.length} 章)</label>
-                                    <div className="flex gap-2">
-                                        <input
-                                            type="number"
-                                            placeholder="無 (未設定)"
-                                            defaultValue={novel.target_ending_chapter || ''}
-                                            onBlur={async (e) => {
-                                                const val = parseInt(e.target.value);
-                                                if (!val) return;
-                                                if (val <= chapters.length + 5) {
-                                                    alert(`完結章節必須大於目前章節 + 5 (至少 ${chapters.length + 6} 章)`);
-                                                    e.target.value = novel.target_ending_chapter || '';
-                                                    return;
-                                                }
-                                                const { error } = await supabase.from('novels').update({ target_ending_chapter: val }).eq('id', novel.id);
-                                                if (!error) {
-                                                    setNovel({ ...novel, target_ending_chapter: val });
-                                                    alert(`已設定預計在第 ${val} 章完結。AI 將會開始收束劇情。`);
-                                                }
-                                            }}
-                                            className={`w-full bg-transparent border ${theme.border} rounded px-3 py-2 text-sm focus:outline-none focus:border-purple-500`}
-                                        />
-                                    </div>
-                                    <p className="text-[10px] opacity-50">設定後，AI 會在接近該章節時自動收束劇情並生成結局。</p>
-                                </div>
-                            </section>
+
 
                             {/* Chapter Jump */}
                             <section>
@@ -866,9 +1113,11 @@ export default function Reader() {
                         {/* Characters Tab */}
                         {wikiTab === 'characters' && (
                             <div className="space-y-3">
-                                <button onClick={openAddCharModal} className={`w-full py-2 border border-dashed ${theme.border} rounded-lg opacity-60 text-sm hover:opacity-100 flex items-center justify-center gap-2`}>
-                                    <Plus size={16} /> 新增角色
-                                </button>
+                                {user && user.id === novel.owner_id && (
+                                    <button onClick={openAddCharModal} className={`w-full py-2 border border-dashed ${theme.border} rounded-lg opacity-60 text-sm hover:opacity-100 flex items-center justify-center gap-2`}>
+                                        <Plus size={16} /> 新增角色
+                                    </button>
+                                )}
                                 {characters
                                     .filter(c => c.status !== 'Retired' && c.status !== 'Exiting') // Hide Retired and Exiting from UI (looks deleted to user)
                                     .map(char => (
@@ -878,17 +1127,21 @@ export default function Reader() {
                                                     <h3 className="font-bold flex items-center gap-2">
                                                         {char.name}
                                                         <span className="text-xs opacity-60 font-normal">({char.role})</span>
-                                                        <button onClick={() => openEditCharModal(char)} className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:text-blue-400">
-                                                            <Edit2 size={12} />
-                                                        </button>
+                                                        {user && user.id === novel.owner_id && (
+                                                            <button onClick={() => openEditCharModal(char)} className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:text-blue-400">
+                                                                <Edit2 size={12} />
+                                                            </button>
+                                                        )}
                                                     </h3>
                                                     <span className={`text-[10px] px-1.5 py-0.5 rounded ${char.status.includes('死') || char.status === 'Dead' ? 'bg-red-900/30 text-red-400' : 'bg-green-900/30 text-green-400'}`}>
                                                         {char.status === 'Alive' ? '存活' : char.status}
                                                     </span>
                                                 </div>
-                                                <button onClick={() => handleDeleteCharacter(char.id)} className="opacity-60 hover:text-red-400">
-                                                    <Trash2 size={16} />
-                                                </button>
+                                                {user && user.id === novel.owner_id && (
+                                                    <button onClick={() => handleDeleteCharacter(char.id)} className="opacity-60 hover:text-red-400">
+                                                        <Trash2 size={16} />
+                                                    </button>
+                                                )}
                                             </div>
                                             <p className="text-sm opacity-80 mt-2">{char.description}</p>
                                         </div>
@@ -899,21 +1152,27 @@ export default function Reader() {
                         {/* Memory Tab */}
                         {wikiTab === 'memory' && (
                             <div className="space-y-3">
-                                <div className="bg-yellow-900/10 border border-yellow-900/30 p-3 rounded-lg flex gap-2 items-start">
-                                    <AlertTriangle size={16} className="text-yellow-500 shrink-0 mt-0.5" />
-                                    <p className="text-xs text-yellow-500/80">修改記憶可能會導致 AI 生成的故事前後不連貫，請謹慎操作。</p>
-                                </div>
-                                <button onClick={handleAddMemory} className={`w-full py-2 border border-dashed ${theme.border} rounded-lg opacity-60 text-sm hover:opacity-100 flex items-center justify-center gap-2`}>
-                                    <Plus size={16} /> 新增記憶節點
-                                </button>
+                                {user && user.id === novel.owner_id && (
+                                    <>
+                                        <div className="bg-yellow-900/10 border border-yellow-900/30 p-3 rounded-lg flex gap-2 items-start">
+                                            <AlertTriangle size={16} className="text-yellow-500 shrink-0 mt-0.5" />
+                                            <p className="text-xs text-yellow-500/80">修改記憶可能會導致 AI 生成的故事前後不連貫，請謹慎操作。</p>
+                                        </div>
+                                        <button onClick={handleAddMemory} className={`w-full py-2 border border-dashed ${theme.border} rounded-lg opacity-60 text-sm hover:opacity-100 flex items-center justify-center gap-2`}>
+                                            <Plus size={16} /> 新增記憶節點
+                                        </button>
+                                    </>
+                                )}
                                 {memories.map(mem => (
                                     <div key={mem.id} className={`p-4 rounded-xl border ${theme.border} ${theme.ui}`}>
                                         <div className="flex justify-between items-start mb-2">
                                             <span className="text-[10px] opacity-50">{new Date(mem.created_at).toLocaleDateString()}</span>
-                                            <div className="flex gap-2">
-                                                <button onClick={() => handleEditMemory(mem)} className="opacity-60 hover:text-blue-400"><Edit2 size={14} /></button>
-                                                <button onClick={() => handleDeleteMemory(mem.id)} className="opacity-60 hover:text-red-400"><Trash2 size={14} /></button>
-                                            </div>
+                                            {user && user.id === novel.owner_id && (
+                                                <div className="flex gap-2">
+                                                    <button onClick={() => handleEditMemory(mem)} className="opacity-60 hover:text-blue-400"><Edit2 size={14} /></button>
+                                                    <button onClick={() => handleDeleteMemory(mem.id)} className="opacity-60 hover:text-red-400"><Trash2 size={14} /></button>
+                                                </div>
+                                            )}
                                         </div>
                                         <p className="text-sm opacity-80">{mem.content}</p>
                                     </div>
