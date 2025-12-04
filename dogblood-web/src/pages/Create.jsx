@@ -53,6 +53,15 @@ export default function Create() {
         { id: '星際科幻', icon: Rocket, label: '星際科幻', desc: '機甲、太空歌劇、未來' },
     ];
 
+    const getRecommendedTotalChapters = (genreId) => {
+        switch (genreId) {
+            case '無限流': return 200;
+            case '修仙玄幻': return 200;
+            case '豪門宮鬥': return 160;
+            case '西方奇幻': return 200;
+            default: return 120;
+        }
+    };
     const POV_OPTIONS = [
         { id: '第三人稱', label: '第三人稱 (上帝視角)', desc: '宏觀敘事、群像描寫', category: 'ALL' },
         { id: '女主', label: '女主 (BG/大女主)', desc: '細膩情感、成長視角', category: 'BG' },
@@ -273,7 +282,25 @@ export default function Create() {
                 profile: profiles.loveInterest || {} // The deep profile from generateRandomSettings
             });
 
-            // B. Merge updates from Chapter 1 generation
+            // B. Add Side Characters from Design Blueprint
+            if (designBlueprint?.side_characters && Array.isArray(designBlueprint.side_characters)) {
+                designBlueprint.side_characters.forEach(sc => {
+                    // Avoid overwriting protagonist/love interest if names collide (though unlikely with strict prompting)
+                    if (!characterMap.has(sc.name)) {
+                        characterMap.set(sc.name, {
+                            novel_id: novel.id,
+                            name: sc.name,
+                            role: sc.role || '配角',
+                            gender: '未知', // Blueprint usually doesn't have gender, default to unknown
+                            description: sc.profile || '重要配角', // Use the short profile string as description
+                            status: 'Alive',
+                            profile: { personality_core: sc.profile } // Store the short profile in the JSON profile as well
+                        });
+                    }
+                });
+            }
+
+            // C. Merge updates from Chapter 1 generation
             if (startResponse.character_updates && startResponse.character_updates.length > 0) {
                 startResponse.character_updates.forEach(update => {
                     const existing = characterMap.get(update.name);

@@ -262,18 +262,37 @@ const getGeminiModel = (jsonMode = false) => genAI.getGenerativeModel({
 // 核心 Agent 函數群
 // ==========================================
 
-const planChapter = async (director, blueprint, contextSummary, memories = [], clues = [], genre = "", tags = [], useDeepSeek = true) => {
+const planChapter = async (director, blueprint, contextSummary, memories = [], clues = [], genre = "", tags = [], useDeepSeek = true, characters = []) => {
     const memoryList = formatMemoriesForFallback(memories, 50);
     const clueList = clues.length > 0 ? clues.map(c => `- ${c}`).join('\n') : "目前暫無明確線索";
 
     // Extract side characters from blueprint if available
-    let sideCharsText = "";
+    let blueprintSideChars = [];
     try {
         const bp = typeof blueprint === 'string' ? JSON.parse(blueprint) : blueprint;
         if (bp && bp.side_characters && Array.isArray(bp.side_characters)) {
-            sideCharsText = bp.side_characters.map(c => `- ${c.name} (${c.role}): ${c.profile}`).join('\n');
+            blueprintSideChars = bp.side_characters;
         }
     } catch (e) { }
+
+    // Merge blueprint characters with dynamic characters (Wiki)
+    // Dynamic characters take precedence if names match (though we don't do strict deduping here, just listing them)
+    // We prioritize the dynamic 'characters' array as it contains the most up-to-date status and new additions
+
+    let availableCastText = "";
+    let exitingCharsText = "";
+
+    if (characters && characters.length > 0) {
+        availableCastText = characters.map(c => `- ${c.name} (${c.role}): ${c.description} [狀態: ${c.status}]`).join('\n');
+
+        // Identify characters marked for exit
+        const exiting = characters.filter(c => c.status === 'Exiting');
+        if (exiting.length > 0) {
+            exitingCharsText = exiting.map(c => c.name).join('、');
+        }
+    } else {
+        availableCastText = blueprintSideChars.map(c => `- ${c.name} (${c.role}): ${c.profile}`).join('\n');
+    }
 
     const prompt = `
     你是一位小說劇情策劃（Plot Architect）。
@@ -284,12 +303,19 @@ const planChapter = async (director, blueprint, contextSummary, memories = [], c
     【導演指令 (本章節奏)】
     ${director.directive}
     
+    ${exitingCharsText ? `
+    【⚠️ 角色退場指令 (Character Exit)】
+    以下角色已被標記為「即將退場」：${exitingCharsText}。
+    請務必在本章劇情中安排合理的理由讓他們**自然離開故事**（例如：死亡、出國、隱退、被捕等）。
+    這是他們最後一次登場，請給予適當的收尾。
+    ` : ""}
+
     【設計圖 (終極目標)】
     ${typeof blueprint === 'string' ? blueprint : JSON.stringify(blueprint)}
     
-    【重要配角庫 (Available Cast)】
-    ${sideCharsText || "暫無預設配角，請根據劇情需要創作"}
-    (請判斷本章是否需要上述配角登場，或安排他們在背景行動)
+    【全體角色庫 (Cast & Status)】
+    ${availableCastText || "暫無預設配角，請根據劇情需要創作"}
+    (這是目前所有已登場或設定好的角色。請判斷本章是否需要安排他們登場/推動劇情，或安排他們在背景行動)
     
     【故事進度 (Story So Far)】
     ${memoryList}
@@ -510,6 +536,64 @@ export const ensureDetailedSettings = async (genre, simpleSettings, tags = [], t
 };
 
 // ==========================================
+// 1.6 補完角色設定 (Wiki 用)
+// ==========================================
+export const refineCharacterProfile = async (charInfo, novelContext, useDeepSeek = true) => {
+    const prompt = `
+    請根據用戶提供的基礎角色資訊，為小說《${novelContext.title}》完善該角色的詳細設定。
+    
+    【用戶提供資訊】
+    姓名：${charInfo.name}
+    定位：${charInfo.role}
+    性別：${charInfo.gender}
+    描述：${charInfo.description}
+    
+    【小說背景】
+    題材：${novelContext.genre}
+    核心梗：${novelContext.trope}
+    
+    【任務】
+    1. 根據小說風格，補全該角色的外貌、性格（表/裡）、核心魅力點。
+    2. 如果是反派，設計其動機；如果是配角，設計其功能性。
+    3. **純中文姓名**：嚴禁拼音或英文。
+    
+    【回傳 JSON 格式】
+    {
+      "name": "${charInfo.name}",
+      "role": "${charInfo.role}",
+      "gender": "${charInfo.gender}",
+      "description": "更完整的描述...",
+      "profile": {
+        "appearance": "...",
+        "personality_surface": "...",
+        "personality_core": "...",
+        "biography": "...",
+        "charm_point": "..."
+      }
+    }
+    `;
+
+    try {
+        if (OPENROUTER_KEY && useDeepSeek) {
+            return await callDeepSeek("你是一位專業的角色設計師。", prompt, true);
+        } else {
+            const model = getGeminiModel(true);
+            const result = await model.generateContent(prompt);
+            return cleanJson(result.response.text());
+        }
+    } catch (error) {
+        console.error("Failed to refine character:", error);
+        return {
+            name: charInfo.name,
+            role: charInfo.role,
+            gender: charInfo.gender,
+            description: charInfo.description,
+            profile: {}
+        };
+    }
+};
+
+// ==========================================
 // 2. 生成第一章 (中式題材用 DeepSeek，其他用 Gemini)
 // ==========================================
 export const generateNovelStart = async (genre, settings, tags = [], tone = "一般", pov = "女主", useDeepSeek = true) => {
@@ -589,12 +673,34 @@ export const generateNovelStart = async (genre, settings, tags = [], tone = "一
             const result = await model.generateContent(systemPrompt + "\n" + userPrompt);
             const jsonResponse = cleanJson(result.response.text());
 
-            // Gemini 初稿需要 Editor 潤色
             if (jsonResponse.content && jsonResponse.content.length > 500) {
                 console.log("✍️ Editor Agent is polishing Chapter 1...");
                 const polishedContent = await polishContent(jsonResponse.content, tone, pov);
                 jsonResponse.content = polishedContent;
             }
+
+            // Post-processing: Finalize 'Exiting' characters to 'Retired'
+            // We append these updates to ensure the DB is updated
+            const exitingChars = characters.filter(c => c.status === 'Exiting');
+            if (exitingChars.length > 0) {
+                if (!jsonResponse.character_updates) jsonResponse.character_updates = [];
+                exitingChars.forEach(c => {
+                    // Check if AI already updated them (avoid duplicates if possible, but upsert handles it)
+                    const alreadyUpdated = jsonResponse.character_updates.find(u => u.name === c.name);
+                    if (!alreadyUpdated) {
+                        jsonResponse.character_updates.push({
+                            name: c.name,
+                            role: c.role,
+                            status: 'Retired', // Final status
+                            description_append: " (已退場)"
+                        });
+                    } else {
+                        // Force status to Retired if AI didn't
+                        alreadyUpdated.status = 'Retired';
+                    }
+                });
+            }
+
             return jsonResponse;
         }
     } catch (error) {
@@ -752,11 +858,19 @@ const determinePlotDirectives = (currentChapterIndex, lastPlotState, genre, tags
     return { phase: grandPhase, intensity, directive: finalDirective, arcName };
 };
 
-export const generateNextChapter = async (novelContext, previousContent, characters = [], memories = [], clues = [], tags = [], tone = "一般", pov = "女主", lastPlotState = null) => {
+
+
+export const generateNextChapter = async (novelContext, prevText, characters = [], memories = [], clues = [], tags = [], tone = "一般", pov = "女主", lastPlotState = null, useDeepSeek = true) => {
     const totalChapters = novelContext.targetEndingChapter || getRecommendedTotalChapters(novelContext.genre);
 
     // 1. Director (Logic)
     const director = determinePlotDirectives(novelContext.currentChapterIndex, lastPlotState, novelContext.genre, tags, totalChapters);
+    console.log("🎬 Director Directive:", director);
+
+    // 2. Planner (DeepSeek or Gemini based on preference)
+    console.log("🧠 Planner Agent is working...");
+    const chapterPlan = await planChapter(director, novelContext.design_blueprint, prevText, memories, clues, novelContext.genre, tags, useDeepSeek, characters);
+    console.log("📝 Chapter Plan:", chapterPlan);
 
     const toneDesc = getToneInstruction(tone);
     const povDesc = getPovInstruction(pov);
@@ -764,12 +878,7 @@ export const generateNextChapter = async (novelContext, previousContent, charact
     const blueprintStr = JSON.stringify(novelContext.design_blueprint || {});
     const charText = characters.map(c => `- ${c.name} (${c.gender || '未知'}/${c.role}): ${c.description} [狀態: ${c.status}]`).join('\n');
     const memText = formatMemoriesForGemini(memories);
-    const prevText = previousContent.slice(-1500);
-
-    // 2. Planner (Logic = DeepSeek if selected, else Gemini)
-    console.log("🧠 Planner Agent is working...");
-    const useDeepSeek = novelContext.settings?.useDeepSeek ?? true; // Default to true if not set
-    const chapterPlan = await planChapter(director, blueprintStr, prevText, memories, clues, novelContext.genre, tags, useDeepSeek);
+    // const prevText = previousContent.slice(-1500); // prevText is now passed directly
 
     const outlineContext = chapterPlan ?
         `【本章劇情大綱(必須嚴格執行)】\n標題：${chapterPlan.chapter_title} \n大綱：${chapterPlan.outline} \n關鍵線索操作：${chapterPlan.key_clue_action} \n感情高光：${chapterPlan.romance_moment} ` :

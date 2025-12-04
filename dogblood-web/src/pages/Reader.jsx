@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ChevronLeft, Info, Settings, Share, BookOpen, X, Trash2, Plus, Edit2, AlertTriangle, Type, Palette, List } from 'lucide-react';
+import { ChevronLeft, Info, Settings, Share, BookOpen, X, Trash2, Plus, Edit2, AlertTriangle, Type, Palette, List, ToggleLeft, ToggleRight, Save, User } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { generateNextChapter } from '../lib/gemini';
+import { generateNextChapter, refineCharacterProfile } from '../lib/gemini';
 import ReactMarkdown from 'react-markdown';
 
 
@@ -33,6 +33,13 @@ export default function Reader() {
     const [showMenu, setShowMenu] = useState(false);
     const [showWiki, setShowWiki] = useState(false);
     const [wikiTab, setWikiTab] = useState('overview');
+    const [useDeepSeek, setUseDeepSeek] = useState(true); // Default to true
+
+    // Character Form State
+    const [editingChar, setEditingChar] = useState(null); // null = adding, object = editing
+    const [showCharForm, setShowCharForm] = useState(false);
+    const [charForm, setCharForm] = useState({ name: '', role: '配角', gender: '未知', description: '', profile: {} });
+    const [isProcessingChar, setIsProcessingChar] = useState(false);
 
     const [loading, setLoading] = useState(true);
     const [generating, setGenerating] = useState(false);
@@ -119,6 +126,9 @@ export default function Reader() {
         try {
             const { data: novelData } = await supabase.from('novels').select('*').eq('id', id).single();
             setNovel(novelData);
+            if (novelData.settings?.useDeepSeek !== undefined) {
+                setUseDeepSeek(novelData.settings.useDeepSeek);
+            }
 
             const { data: chaptersData } = await supabase.from('chapters').select('*').eq('novel_id', id).order('chapter_index', { ascending: true });
             setChapters(chaptersData);
@@ -198,23 +208,40 @@ export default function Reader() {
                 novel.tags || [],            // tags (Arg 6)
                 novel.settings?.tone,        // tone (Arg 7)
                 novel.settings?.pov,         // pov (Arg 8)
-                novel.settings?.plot_state   // lastPlotState (Arg 9)
+                novel.settings?.plot_state,  // lastPlotState (Arg 9)
+                useDeepSeek                  // useDeepSeek (Arg 10)
             );
 
             // 2. Handle DB Updates
             const updates = [];
 
             // A. Insert Chapter
-            const newIndex = lastChapter.chapter_index + 1;
+            // Re-verify the next index right before insertion to be absolutely safe
+            const { data: latestChapter } = await supabase
+                .from('chapters')
+                .select('chapter_index')
+                .eq('novel_id', novel.id)
+                .order('chapter_index', { ascending: false })
+                .limit(1)
+                .single();
+
+            const safeNewIndex = (latestChapter?.chapter_index || lastChapter.chapter_index) + 1;
+
             updates.push(
                 supabase.from('chapters').insert({
                     novel_id: novel.id,
-                    chapter_index: newIndex,
-                    title: `第 ${newIndex} 章`,
+                    chapter_index: safeNewIndex,
+                    title: `第 ${safeNewIndex} 章`,
                     content: aiResponse.content
                 }).select().single()
                     .then(({ data }) => {
-                        if (data) setChapters(prev => [...prev, data]);
+                        if (data) {
+                            setChapters(prev => {
+                                // Prevent duplicates in local state
+                                if (prev.some(c => c.chapter_index === data.chapter_index)) return prev;
+                                return [...prev, data];
+                            });
+                        }
                     })
             );
 
@@ -392,27 +419,82 @@ export default function Reader() {
     };
 
     // Wiki Actions
-    const handleAddCharacter = async () => {
-        const name = prompt("角色名稱:");
-        if (!name) return;
-        const role = prompt("角色定位 (主角/反派/配角):", "配角");
-        const desc = prompt("角色描述:");
+    const handleSaveCharacter = async () => {
+        if (!charForm.name || !charForm.description) {
+            alert("請填寫名稱和描述");
+            return;
+        }
 
-        const { data, error } = await supabase.from('characters').insert({
-            novel_id: id,
-            name,
-            role,
-            description: desc,
-            status: 'Alive'
-        }).select().single();
+        setIsProcessingChar(true);
+        try {
+            let finalCharData = { ...charForm };
 
-        if (!error) setCharacters([...characters, data]);
+            // If adding new character, use AI to refine profile
+            if (!editingChar) {
+                console.log("Refining character with AI...");
+                const refined = await refineCharacterProfile(charForm, { title: novel.title, genre: novel.genre, trope: novel.settings.trope }, useDeepSeek);
+                finalCharData = { ...finalCharData, ...refined };
+            } else {
+                // If editing, use the form data which might have modified profile
+                finalCharData.profile = charForm.profile;
+            }
+
+            const { data, error } = await supabase.from('characters').upsert({
+                id: editingChar?.id, // If editing, include ID
+                novel_id: id,
+                name: finalCharData.name,
+                role: finalCharData.role,
+                gender: finalCharData.gender,
+                description: finalCharData.description,
+                profile: finalCharData.profile || {},
+                status: editingChar?.status || 'Alive'
+            }).select().single();
+
+            if (error) throw error;
+
+            if (editingChar) {
+                setCharacters(characters.map(c => c.id === editingChar.id ? data : c));
+            } else {
+                setCharacters([...characters, data]);
+            }
+            setShowCharForm(false);
+            setCharForm({ name: '', role: '配角', gender: '未知', description: '', profile: {} });
+        } catch (error) {
+            console.error("Error saving character:", error);
+            alert("儲存失敗");
+        } finally {
+            setIsProcessingChar(false);
+        }
+    };
+
+    const openAddCharModal = () => {
+        setEditingChar(null);
+        setCharForm({ name: '', role: '配角', gender: '未知', description: '', profile: {} });
+        setShowCharForm(true);
+    };
+
+    const openEditCharModal = (char) => {
+        setEditingChar(char);
+        setCharForm({
+            name: char.name,
+            role: char.role,
+            gender: char.gender || '未知',
+            description: char.description,
+            profile: char.profile || {}
+        });
+        setShowCharForm(true);
     };
 
     const handleDeleteCharacter = async (charId) => {
-        if (!confirm("確定刪除此角色？")) return;
-        await supabase.from('characters').delete().eq('id', charId);
-        setCharacters(characters.filter(c => c.id !== charId));
+        if (!confirm("確定刪除此角色？\n\n注意：角色將會在「下一章」被安排自然退場（死亡、離開等），之後才會完全消失。")) return;
+
+        // Soft delete: Mark as 'Exiting' so AI knows to write them out
+        const { error } = await supabase.from('characters').update({ status: 'Exiting' }).eq('id', charId);
+
+        if (!error) {
+            // Update local state to reflect change immediately
+            setCharacters(characters.map(c => c.id === charId ? { ...c, status: 'Exiting' } : c));
+        }
     };
 
     const handleAddMemory = async () => {
@@ -544,6 +626,34 @@ export default function Reader() {
                                         <ChevronLeft size={16} /> 返回書庫
                                     </Link>
                                 </div>
+                            </section>
+
+                            {/* AI Model Selection */}
+                            <section>
+                                <h4 className="text-xs font-bold opacity-50 mb-3 uppercase tracking-wider">AI 模型</h4>
+                                <div className={`p-4 rounded-lg border ${theme.border} flex items-center justify-between`}>
+                                    <div className="flex items-center gap-2">
+                                        <span className={`text-sm font-bold ${useDeepSeek ? 'text-blue-500' : 'opacity-50'}`}>DeepSeek V3</span>
+                                        <span className="text-xs opacity-50">vs</span>
+                                        <span className={`text-sm font-bold ${!useDeepSeek ? 'text-purple-500' : 'opacity-50'}`}>Gemini 2.0</span>
+                                    </div>
+                                    <button
+                                        onClick={async () => {
+                                            const newVal = !useDeepSeek;
+                                            setUseDeepSeek(newVal);
+                                            // Persist setting
+                                            await supabase.from('novels').update({
+                                                settings: { ...novel.settings, useDeepSeek: newVal }
+                                            }).eq('id', novel.id);
+                                        }}
+                                        className={`relative w-12 h-6 rounded-full transition-colors duration-300 ${useDeepSeek ? 'bg-blue-600' : 'bg-purple-600'}`}
+                                    >
+                                        <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform duration-300 ${useDeepSeek ? 'left-1' : 'translate-x-7 left-0'}`} />
+                                    </button>
+                                </div>
+                                <p className="text-[10px] opacity-50 mt-2 px-1">
+                                    {useDeepSeek ? "DeepSeek: 擅長中式網文邏輯與情節策劃。" : "Gemini: 擅長擴寫與潤色，速度較快。"}
+                                </p>
                             </section>
 
                             {/* Ending Settings */}
@@ -691,25 +801,33 @@ export default function Reader() {
                         {/* Characters Tab */}
                         {wikiTab === 'characters' && (
                             <div className="space-y-3">
-                                <button onClick={handleAddCharacter} className={`w-full py-2 border border-dashed ${theme.border} rounded-lg opacity-60 text-sm hover:opacity-100 flex items-center justify-center gap-2`}>
+                                <button onClick={openAddCharModal} className={`w-full py-2 border border-dashed ${theme.border} rounded-lg opacity-60 text-sm hover:opacity-100 flex items-center justify-center gap-2`}>
                                     <Plus size={16} /> 新增角色
                                 </button>
-                                {characters.map(char => (
-                                    <div key={char.id} className={`p-4 rounded-xl border ${theme.border} ${theme.ui} relative group`}>
-                                        <div className="flex justify-between items-start">
-                                            <div>
-                                                <h3 className="font-bold">{char.name} <span className="text-xs opacity-60 font-normal">({char.role})</span></h3>
-                                                <span className={`text-[10px] px-1.5 py-0.5 rounded ${char.status.includes('死') || char.status === 'Dead' ? 'bg-red-900/30 text-red-400' : 'bg-green-900/30 text-green-400'}`}>
-                                                    {char.status === 'Alive' ? '存活' : char.status}
-                                                </span>
+                                {characters
+                                    .filter(c => c.status !== 'Retired' && c.status !== 'Exiting') // Hide Retired and Exiting from UI (looks deleted to user)
+                                    .map(char => (
+                                        <div key={char.id} className={`p-4 rounded-xl border ${theme.border} ${theme.ui} relative group`}>
+                                            <div className="flex justify-between items-start">
+                                                <div>
+                                                    <h3 className="font-bold flex items-center gap-2">
+                                                        {char.name}
+                                                        <span className="text-xs opacity-60 font-normal">({char.role})</span>
+                                                        <button onClick={() => openEditCharModal(char)} className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:text-blue-400">
+                                                            <Edit2 size={12} />
+                                                        </button>
+                                                    </h3>
+                                                    <span className={`text-[10px] px-1.5 py-0.5 rounded ${char.status.includes('死') || char.status === 'Dead' ? 'bg-red-900/30 text-red-400' : 'bg-green-900/30 text-green-400'}`}>
+                                                        {char.status === 'Alive' ? '存活' : char.status}
+                                                    </span>
+                                                </div>
+                                                <button onClick={() => handleDeleteCharacter(char.id)} className="opacity-60 hover:text-red-400">
+                                                    <Trash2 size={16} />
+                                                </button>
                                             </div>
-                                            <button onClick={() => handleDeleteCharacter(char.id)} className="opacity-60 hover:text-red-400">
-                                                <Trash2 size={16} />
-                                            </button>
+                                            <p className="text-sm opacity-80 mt-2">{char.description}</p>
                                         </div>
-                                        <p className="text-sm opacity-80 mt-2">{char.description}</p>
-                                    </div>
-                                ))}
+                                    ))}
                             </div>
                         )}
 
@@ -738,6 +856,134 @@ export default function Reader() {
                             </div>
                         )}
 
+                    </div>
+                </div>
+            )}
+
+            {/* Character Form Modal */}
+            {showCharForm && (
+                <div className="absolute inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+                    <div className={`w-full max-w-md ${theme.ui} ${theme.text} rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]`}>
+                        <div className={`p-4 border-b ${theme.border} flex justify-between items-center`}>
+                            <h3 className="font-bold">{editingChar ? '編輯角色' : '新增角色'}</h3>
+                            <button onClick={() => setShowCharForm(false)}><X size={20} /></button>
+                        </div>
+
+                        <div className="p-6 space-y-4 overflow-y-auto">
+                            <div>
+                                <label className="text-xs opacity-70 block mb-1">角色名稱</label>
+                                <input
+                                    value={charForm.name}
+                                    onChange={(e) => setCharForm({ ...charForm, name: e.target.value })}
+                                    className={`w-full bg-transparent border ${theme.border} rounded px-3 py-2 focus:outline-none focus:border-purple-500`}
+                                    placeholder="例如：林湘"
+                                />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="text-xs opacity-70 block mb-1">定位</label>
+                                    <select
+                                        value={charForm.role}
+                                        onChange={(e) => setCharForm({ ...charForm, role: e.target.value })}
+                                        className={`w-full bg-transparent border ${theme.border} rounded px-3 py-2 focus:outline-none focus:border-purple-500`}
+                                    >
+                                        <option value="主角">主角</option>
+                                        <option value="配角">配角</option>
+                                        <option value="反派">反派</option>
+                                        <option value="路人">路人</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="text-xs opacity-70 block mb-1">性別</label>
+                                    <select
+                                        value={charForm.gender}
+                                        onChange={(e) => setCharForm({ ...charForm, gender: e.target.value })}
+                                        className={`w-full bg-transparent border ${theme.border} rounded px-3 py-2 focus:outline-none focus:border-purple-500`}
+                                    >
+                                        <option value="男">男</option>
+                                        <option value="女">女</option>
+                                        <option value="未知">未知</option>
+                                        <option value="無性別">無性別</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="text-xs opacity-70 block mb-1">外貌/性格描述</label>
+                                <textarea
+                                    value={charForm.description}
+                                    onChange={(e) => setCharForm({ ...charForm, description: e.target.value })}
+                                    className={`w-full bg-transparent border ${theme.border} rounded px-3 py-2 h-32 focus:outline-none focus:border-purple-500 resize-none`}
+                                    placeholder="請輸入角色的外貌特徵、性格關鍵詞或背景故事..."
+                                />
+                            </div>
+
+                            {!editingChar && (
+                                <div className="bg-blue-500/10 border border-blue-500/20 p-3 rounded text-xs text-blue-400 flex gap-2">
+                                    <Info size={14} className="shrink-0 mt-0.5" />
+                                    <p>點擊儲存後，AI ({useDeepSeek ? 'DeepSeek' : 'Gemini'}) 將會自動補全該角色的詳細設定（冰山檔案）。</p>
+                                </div>
+                            )}
+
+                            {/* Profile Editing Section (Only when editing) */}
+                            {editingChar && (
+                                <div className="space-y-3 pt-4 border-t border-slate-700/50">
+                                    <h4 className="text-xs font-bold opacity-50 uppercase tracking-wider">詳細設定 (Profile)</h4>
+
+                                    <div>
+                                        <label className="text-xs opacity-70 block mb-1">外貌 (Appearance)</label>
+                                        <textarea
+                                            value={charForm.profile?.appearance || ''}
+                                            onChange={(e) => setCharForm({ ...charForm, profile: { ...charForm.profile, appearance: e.target.value } })}
+                                            className={`w-full bg-transparent border ${theme.border} rounded px-3 py-2 h-20 text-xs focus:outline-none focus:border-purple-500 resize-none`}
+                                            placeholder="詳細外貌描寫..."
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="text-xs opacity-70 block mb-1">表層性格 (Personality Surface)</label>
+                                        <textarea
+                                            value={charForm.profile?.personality_surface || ''}
+                                            onChange={(e) => setCharForm({ ...charForm, profile: { ...charForm.profile, personality_surface: e.target.value } })}
+                                            className={`w-full bg-transparent border ${theme.border} rounded px-3 py-2 h-20 text-xs focus:outline-none focus:border-purple-500 resize-none`}
+                                            placeholder="平時展現出的性格..."
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="text-xs opacity-70 block mb-1">核心性格 (Personality Core)</label>
+                                        <textarea
+                                            value={charForm.profile?.personality_core || ''}
+                                            onChange={(e) => setCharForm({ ...charForm, profile: { ...charForm.profile, personality_core: e.target.value } })}
+                                            className={`w-full bg-transparent border ${theme.border} rounded px-3 py-2 h-20 text-xs focus:outline-none focus:border-purple-500 resize-none`}
+                                            placeholder="內在真實性格與動機..."
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="text-xs opacity-70 block mb-1">背景故事 (Biography)</label>
+                                        <textarea
+                                            value={charForm.profile?.biography || ''}
+                                            onChange={(e) => setCharForm({ ...charForm, profile: { ...charForm.profile, biography: e.target.value } })}
+                                            className={`w-full bg-transparent border ${theme.border} rounded px-3 py-2 h-24 text-xs focus:outline-none focus:border-purple-500 resize-none`}
+                                            placeholder="角色的過去經歷..."
+                                        />
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        <div className={`p-4 border-t ${theme.border} flex justify-end gap-2`}>
+                            <button onClick={() => setShowCharForm(false)} className="px-4 py-2 opacity-60 hover:opacity-100">取消</button>
+                            <button
+                                onClick={handleSaveCharacter}
+                                disabled={isProcessingChar}
+                                className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 flex items-center gap-2"
+                            >
+                                {isProcessingChar ? 'AI 處理中...' : '儲存'}
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
