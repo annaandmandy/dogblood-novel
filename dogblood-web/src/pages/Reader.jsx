@@ -596,10 +596,10 @@ export default function Reader() {
     if (!novel || !currentChapter) return <div className="h-screen flex items-center justify-center text-slate-500">無內容</div>;
 
     return (
-        <div className={`h-[100dvh] ${theme.bg} ${theme.text} ${preferences.fontFamily} leading-relaxed relative overflow-hidden flex flex-col transition-colors duration-300`}>
+        <div className={`h-[100dvh] ${theme.bg} ${theme.text} ${preferences.fontFamily} leading-relaxed relative overflow-hidden flex flex-col transition-colors duration-300 pt-[calc(env(safe-area-inset-top))]`}>
 
             {/* Header Info (Top Right) */}
-            <div className="absolute top-4 right-6 z-10 opacity-50 text-xs font-medium pointer-events-none">
+            <div className="absolute top-12 right-6 z-10 opacity-50 text-xs font-medium pointer-events-none">
                 {novel.title}
             </div>
 
