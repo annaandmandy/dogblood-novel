@@ -395,24 +395,86 @@ export default function Reader() {
     // Pagination Logic
     const currentChapter = chapters[currentChapterIndex];
 
+    // Navigation Logic
+    const handleNextPage = () => {
+        if (currentPageIndex < totalPages - 1) {
+            setCurrentPageIndex(prev => prev + 1);
+        } else if (currentChapterIndex < chapters.length - 1) {
+            setCurrentChapterIndex(prev => prev + 1);
+            setCurrentPageIndex(0);
+        }
+    };
+
+    const handlePrevPage = () => {
+        if (currentPageIndex > 0) {
+            setCurrentPageIndex(prev => prev - 1);
+        } else if (currentChapterIndex > 0) {
+            setCurrentChapterIndex(prev => prev - 1);
+            setCurrentPageIndex(0);
+        }
+    };
+
+    // Keyboard & Volume Key Navigation
+    useEffect(() => {
+        const handleKeyDown = (e) => {
+            // Arrow keys
+            if (e.key === 'ArrowRight') handleNextPage();
+            if (e.key === 'ArrowLeft') handlePrevPage();
+
+            // Volume keys (Note: iOS Safari doesn't expose these by default, but some wrappers/browsers might)
+            // We map VolumeUp to Next (or Prev depending on preference, usually Next)
+            if (e.key === 'VolumeUp') {
+                e.preventDefault(); // Try to prevent system volume change if possible (rarely works on web)
+                handleNextPage();
+            }
+            if (e.key === 'VolumeDown') {
+                e.preventDefault();
+                handlePrevPage();
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [currentPageIndex, currentChapterIndex, totalPages, chapters]);
+
+    // Swipe Logic
+    const [touchStart, setTouchStart] = useState(null);
+    const [touchEnd, setTouchEnd] = useState(null);
+    const minSwipeDistance = 50;
+
+    const onTouchStart = (e) => {
+        setTouchEnd(null);
+        setTouchStart(e.targetTouches[0].clientX);
+    };
+
+    const onTouchMove = (e) => {
+        setTouchEnd(e.targetTouches[0].clientX);
+    };
+
+    const onTouchEnd = () => {
+        if (!touchStart || !touchEnd) return;
+        const distance = touchStart - touchEnd;
+        const isLeftSwipe = distance > minSwipeDistance;
+        const isRightSwipe = distance < -minSwipeDistance;
+
+        if (isLeftSwipe) {
+            handleNextPage();
+        } else if (isRightSwipe) {
+            handlePrevPage();
+        }
+    };
+
     const handlePageClick = (e) => {
+        // Prevent click if it was a swipe
+        if (touchStart && touchEnd && Math.abs(touchStart - touchEnd) > 10) return;
+
         const width = window.innerWidth;
         const clickX = e.clientX;
 
         if (clickX > width * 0.7) {
-            if (currentPageIndex < totalPages - 1) {
-                setCurrentPageIndex(prev => prev + 1);
-            } else if (currentChapterIndex < chapters.length - 1) {
-                setCurrentChapterIndex(prev => prev + 1);
-                setCurrentPageIndex(0);
-            }
+            handleNextPage();
         } else if (clickX < width * 0.3) {
-            if (currentPageIndex > 0) {
-                setCurrentPageIndex(prev => prev - 1);
-            } else if (currentChapterIndex > 0) {
-                setCurrentChapterIndex(prev => prev - 1);
-                setCurrentPageIndex(0);
-            }
+            handlePrevPage();
         } else {
             setShowMenu(!showMenu);
         }
@@ -544,6 +606,9 @@ export default function Reader() {
             {/* Content Area */}
             <div
                 onClick={handlePageClick}
+                onTouchStart={onTouchStart}
+                onTouchMove={onTouchMove}
+                onTouchEnd={onTouchEnd}
                 className="flex-1 px-6 py-12 md:p-12 max-w-3xl mx-auto w-full cursor-pointer flex flex-col transition-all duration-300"
             >
                 <div className="flex-1 relative overflow-hidden">
