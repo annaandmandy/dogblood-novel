@@ -38,6 +38,7 @@ create table if not exists characters (
   novel_id uuid references novels(id) on delete cascade not null,
   name text not null,
   role text, -- Protagonist, Antagonist, Supporting
+  gender text, -- Male, Female, Other
   status text default 'Alive', -- Alive, Dead, Missing
   attributes jsonb default '{}', -- { identity: "...", ability: "..." }
   description text,
@@ -93,3 +94,6 @@ alter table novels add column if not exists tags text[];
 
 -- Add profile to characters table (for deep character settings)
 alter table characters add column if not exists profile jsonb default '{}';
+
+-- Add gender to characters table
+alter table characters add column if not exists gender text;

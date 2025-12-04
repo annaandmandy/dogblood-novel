@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     Dice5, ArrowRight, Sparkles,
-    Infinity, VenetianMask, CloudLightning, Skull, Crown, Heart,
+    Infinity, VenetianMask, CloudLightning, Skull, Crown, Heart, Sword, Rocket,
     Zap, Smile, Scale, Moon, Coffee
 } from 'lucide-react';
 import { generateNovelStart, generateRandomSettings, getRecommendedTotalChapters } from '../lib/gemini';
@@ -47,6 +47,8 @@ export default function Create() {
         { id: '末世生存', icon: Skull, label: '末世生存', desc: '喪屍、天災、人性考驗' },
         { id: '豪門宮鬥', icon: Crown, label: '豪門宮鬥', desc: '復仇、權謀、打臉' },
         { id: '都市情緣', icon: Heart, label: '都市情緣', desc: '甜寵、虐戀、現代日常' },
+        { id: '西方奇幻', icon: Sword, label: '西方奇幻', desc: '劍與魔法、冒險、龍' },
+        { id: '星際科幻', icon: Rocket, label: '星際科幻', desc: '機甲、太空歌劇、未來' },
     ];
 
     const POV_OPTIONS = [
@@ -61,15 +63,15 @@ export default function Create() {
         { id: '爽文', icon: Zap, label: '爽文', desc: '節奏快、不憋屈' },
         { id: '歡脫', icon: Smile, label: '歡脫', desc: '搞笑、沙雕、吐槽' },
         { id: '嚴肅', icon: Scale, label: '嚴肅', desc: '正劇、權謀、寫實' },
-        { id: '暗黑', icon: Moon, label: '暗黑', desc: '壓抑、絕望、人性' },
+        { id: '虐戀', icon: Moon, label: '虐戀', desc: '壓抑、絕望、人性' },
         { id: '溫馨', icon: Coffee, label: '溫馨', desc: '治癒、日常、慢熱' },
     ];
 
     const AVAILABLE_TAGS = [
-        "重生", "穿越", "系統", "穿書", "馬甲",
+        "重生", "穿越", "救贖", "系統", "穿書", "馬甲",
         "強強", "主僕", "相愛相殺", "破鏡重圓", "追妻火葬場", "年下",
         "副本解密", "生存遊戲", "升級", "歷練", "打臉", "復仇", "建設", "權謀",
-        "校園", "職場", "娛樂圈", "幫派", "臥底", "動作", "喪屍", "天災"
+        "校園", "職場", "娛樂圈", "幫派", "臥底", "動作", "喪屍", "天災", "中式恐怖", "修仙", "規則怪談", "克蘇魯"
     ];
 
     // --- Handlers ---
@@ -83,8 +85,8 @@ export default function Create() {
         if (selectedTags.includes(tag)) {
             setSelectedTags(prev => prev.filter(t => t !== tag));
         } else {
-            if (selectedTags.length >= 3) {
-                alert("最多選擇 3 個標籤");
+            if (selectedTags.length >= 5) {
+                alert("最多選擇 5 個標籤");
                 return;
             }
             setSelectedTags(prev => [...prev, tag]);
@@ -93,8 +95,8 @@ export default function Create() {
 
     const addCustomTag = () => {
         if (!customTag.trim()) return;
-        if (selectedTags.length >= 3) {
-            alert("最多選擇 3 個標籤");
+        if (selectedTags.length >= 5) {
+            alert("最多選擇 5 個標籤");
             return;
         }
         if (!selectedTags.includes(customTag.trim())) {
@@ -124,8 +126,8 @@ export default function Create() {
             });
 
             setProfiles({
-                protagonist: randomSettings.protagonist.profile,
-                loveInterest: randomSettings.loveInterest.profile
+                protagonist: { ...randomSettings.protagonist.profile, gender: randomSettings.protagonist.gender },
+                loveInterest: { ...randomSettings.loveInterest.profile, gender: randomSettings.loveInterest.gender }
             });
 
             if (randomSettings.design_blueprint) {
@@ -207,6 +209,7 @@ export default function Create() {
                 novel_id: novel.id,
                 name: settings.protagonist,
                 role: '主角',
+                gender: profiles.protagonist?.gender || '未知',
                 description: '本故事主角',
                 status: 'Alive',
                 profile: profiles.protagonist || {} // The deep profile from generateRandomSettings
@@ -216,6 +219,7 @@ export default function Create() {
                 novel_id: novel.id,
                 name: settings.loveInterest,
                 role: '對象/反派',
+                gender: profiles.loveInterest?.gender || '未知',
                 description: '本故事重要角色',
                 status: 'Alive',
                 profile: profiles.loveInterest || {} // The deep profile from generateRandomSettings
@@ -231,6 +235,7 @@ export default function Create() {
                         characterMap.set(update.name, {
                             ...existing,
                             role: update.role || existing.role,
+                            gender: update.gender || existing.gender,
                             description: update.description || existing.description,
                             status: update.status || existing.status,
                             profile: { ...existing.profile, ...update.profile_update } // Merge deep profile with updates
@@ -241,6 +246,7 @@ export default function Create() {
                             novel_id: novel.id,
                             name: update.name,
                             role: update.role || '配角',
+                            gender: update.gender || '未知',
                             description: update.description || '新登場角色',
                             status: update.status || 'Alive',
                             profile: update.profile_update || {}

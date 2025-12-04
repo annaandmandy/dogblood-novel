@@ -89,6 +89,7 @@ export default function Reader() {
     // Auto-generation Effect
     useEffect(() => {
         if (!novel || chapters.length === 0) return;
+        if (generationError) return; // Stop auto-generation on error
 
         const checkAndGenerate = async () => {
             // If we are close to the end (within 5 chapters), generate more
@@ -98,7 +99,7 @@ export default function Reader() {
         };
 
         checkAndGenerate();
-    }, [currentChapterIndex, chapters.length, novel]);
+    }, [currentChapterIndex, chapters.length, novel, generating, generationError]);
 
     const fetchUserProfile = async () => {
         const { data } = await supabase.from('profiles').select('preferences').eq('id', 'productive_v1').single();
@@ -193,10 +194,11 @@ export default function Reader() {
                 lastChapter.content,
                 characters,
                 memories,
-                novel.tags || [],
-                novel.settings?.tone,
-                novel.settings?.pov,
-                novel.settings?.plot_state // Pass lastPlotState
+                novel.settings?.clues || [], // clues (Arg 5)
+                novel.tags || [],            // tags (Arg 6)
+                novel.settings?.tone,        // tone (Arg 7)
+                novel.settings?.pov,         // pov (Arg 8)
+                novel.settings?.plot_state   // lastPlotState (Arg 9)
             );
 
             // 2. Handle DB Updates
@@ -250,9 +252,11 @@ export default function Reader() {
                     let finalDesc = update.description || update.description_append || "新登場角色";
                     let finalName = update.name;
                     let finalProfile = update.profile_update || {};
+                    let finalGender = update.gender || '未知';
 
                     if (existingChar) {
                         finalName = existingChar.name; // Keep original name
+                        finalGender = existingChar.gender || update.gender || '未知'; // Keep existing gender if known
                         if (update.description) {
                             finalDesc = update.description;
                         } else if (update.description_append) {
@@ -278,6 +282,7 @@ export default function Reader() {
                             novel_id: novel.id,
                             name: finalName,
                             role: existingChar ? existingChar.role : '配角',
+                            gender: finalGender,
                             status: finalStatus,
                             description: finalDesc,
                             profile: finalProfile
@@ -293,7 +298,8 @@ export default function Reader() {
                                         .update({
                                             status: finalStatus,
                                             description: finalDesc,
-                                            profile: finalProfile
+                                            profile: finalProfile,
+                                            gender: finalGender
                                         })
                                         .eq('novel_id', novel.id)
                                         .eq('name', finalName);
@@ -309,21 +315,39 @@ export default function Reader() {
                 updates.push(fetchWikiData());
             }
 
-            // D. Update Plot State in Novel Settings
-            if (aiResponse.plot_state) {
-                const newSettings = {
-                    ...novel.settings,
-                    plot_state: aiResponse.plot_state
-                };
+            // D. Update Plot State & Clues in Novel Settings
+            let newSettings = { ...novel.settings };
+            let settingsChanged = false;
 
+            // Update Plot State
+            if (aiResponse.plot_state) {
+                newSettings.plot_state = aiResponse.plot_state;
+                settingsChanged = true;
+            }
+
+            // Update Clues
+            let currentClues = newSettings.clues || [];
+            if (aiResponse.new_clues?.length > 0 || aiResponse.resolved_clues?.length > 0) {
+                // Add new clues
+                if (aiResponse.new_clues) {
+                    currentClues = [...currentClues, ...aiResponse.new_clues];
+                }
+                // Remove resolved clues
+                if (aiResponse.resolved_clues) {
+                    currentClues = currentClues.filter(c => !aiResponse.resolved_clues.includes(c));
+                }
+                newSettings.clues = currentClues;
+                settingsChanged = true;
+            }
+
+            if (settingsChanged) {
                 updates.push(
                     supabase.from('novels')
                         .update({ settings: newSettings })
                         .eq('id', novel.id)
                         .then(({ error }) => {
-                            if (error) console.error("Failed to update plot state:", error);
+                            if (error) console.error("Failed to update settings (plot/clues):", error);
                             else {
-                                // Update local state to reflect change immediately
                                 setNovel(prev => ({ ...prev, settings: newSettings }));
                             }
                         })
