@@ -7,7 +7,15 @@ import { planInfinite } from './agents/infinite/planInfinite.js';
 dotenv.config();
 
 const app = express();
-app.use(cors());
+app.use(cors({
+    origin: [
+        'http://localhost:5173',
+        'http://localhost:3000',
+        'https://annaandmandy.github.io',
+        'https://dogblood-novel.dogblood-novel.workers.dev'
+    ],
+    credentials: true
+}));
 app.use(express.json({ limit: '10mb' }));
 
 const PORT = process.env.PORT || 3000;
