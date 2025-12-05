@@ -228,8 +228,8 @@ export const generateInfiniteSettings = async (tags = [], tone = "一般", targe
           "world_truth": "世界隱藏真相",
           "ending_vision": "預設結局",
           "side_characters": [ 
-              { "name": "...", "role": "隊友/搞笑擔當", "profile": "..." },
-              { "name": "...", "role": "隊友/智囊", "profile": "..." }
+              { "name": "...", "role": "隊友/搞笑擔當", "profile": "...", "speaking_style": "...", "sample_dialogue": "..." },
+              { "name": "...", "role": "隊友/智囊", "profile": "...", "speaking_style": "...", "sample_dialogue": "..." }
           ]
       },
       "first_dungeon_setting": {
@@ -240,8 +240,8 @@ export const generateInfiniteSettings = async (tags = [], tone = "一般", targe
           "missions": ["主線任務...", "支線任務..."], 
           "mechanics": { "gameplay": "核心玩法", "threat": "主要威脅" }
       },
-      "protagonist": { "name": "主角名", "role": "主角", "gender": "...", "profile": { "appearance": "...", "personality_surface": "...", "personality_core": "...", "biography": "...", "trauma": "...", "desire": "..." } },
-      "loveInterest": { "name": "對象名", "role": "...", "gender": "...", "profile": { ... } }
+      "protagonist": { "name": "主角名", "role": "主角", "gender": "...", "profile": { "appearance": "...", "personality_surface": "...", "personality_core": "...", "biography": "...", "trauma": "...", "desire": "...", "speaking_style": "...", "sample_dialogue": "..." } },
+      "loveInterest": { "name": "對象名", "role": "...", "gender": "...", "profile": { "appearance": "...", "personality_surface": "...", "personality_core": "...", "biography": "...", "trauma": "...", "desire": "...", "speaking_style": "...", "sample_dialogue": "..." } }
     }
     `;
 
@@ -270,20 +270,33 @@ export const ensureInfiniteSettings = async (simpleSettings, tags = [], tone = "
         ? "設計【規則怪談】副本。包含詭異規則書。"
         : "設計【生存/動作】副本。包含明確的系統任務面板與抹殺條件。";
 
+    const toneDesc = getToneInstruction(tone);
+    const styleGuide = `風格：${tags.join('、')} | ${toneDesc} | 類別：${category}`;
+
+    const summaryText = simpleSettings.summary ? `簡介：${simpleSettings.summary}` : "";
+    const tropeText = simpleSettings.trope ? `核心梗：${simpleSettings.trope}` : "";
+    const coreInfo = [summaryText, tropeText].filter(Boolean).join('\n    ') || "暫無具體簡介";
+
     const prompt = `
     你是一位無限流小說架構師。
     ${INFINITE_ANTI_CLICHE}
 
     【用戶提供資訊】
-    標題：${simpleSettings.title}
-    簡介：${simpleSettings.summary || simpleSettings.trope}
-    主角：${simpleSettings.protagonist}
-    對象：${simpleSettings.loveInterest}
+    標題：${simpleSettings.title || "未命名"}
+    ${styleGuide}
+    ${coreInfo}
+    
+    主角姓名：${simpleSettings.protagonist?.name || "未定"}
+    主角初步設定：${JSON.stringify(simpleSettings.protagonist?.profile || {})}
+    
+    對象姓名：${simpleSettings.loveInterest?.name || "未定"}
+    對象初步設定：${JSON.stringify(simpleSettings.loveInterest?.profile || {})}
 
     【補全任務】
-    1. 深度人設。
-    2. 主線設計。
-    3. **第一副本設計**：${dungeonRequirement}
+    1. **CP 設計**：強化主角與對象的張力（宿敵/救贖/拉扯）。
+    2. **主角團 (The Squad)**：請設計 2-3 位**固定隊友**。賦予他們鮮明的標籤（如：搞笑擔當、智囊、武力）。
+    3. **人設防崩 (Anti-OOC)**：為所有角色設計獨特的說話風格與代表台詞。
+    4. **第一副本設計**：${dungeonRequirement}
 
     【回傳 JSON】
     {
@@ -291,7 +304,10 @@ export const ensureInfiniteSettings = async (simpleSettings, tags = [], tone = "
           "main_goal": "主角終極目標",
           "world_truth": "世界隱藏真相",
           "ending_vision": "預設結局",
-          "side_characters": [{ "name": "...", "role": "...", "profile": "..." }]
+          "side_characters": [
+              { "name": "...", "role": "隊友/搞笑擔當", "profile": "...", "speaking_style": "...", "sample_dialogue": "..." },
+              { "name": "...", "role": "隊友/智囊", "profile": "...", "speaking_style": "...", "sample_dialogue": "..." }
+          ]
       },
       "first_dungeon_setting": {
           "dungeon_name": "副本名稱",
@@ -304,16 +320,16 @@ export const ensureInfiniteSettings = async (simpleSettings, tags = [], tone = "
           "endings": { "normal": "...", "true": "..." }
       },
       "protagonist": {
-          "name": "${simpleSettings.protagonist}",
+          "name": "${simpleSettings.protagonist?.name || "主角名"}",
           "role": "主角",
-          "gender": "未知",
-          "profile": { "appearance": "...", "personality_surface": "...", "personality_core": "...", "biography": "...", "trauma": "...", "desire": "..." }
+          "gender": "...",
+          "profile": { "appearance": "...", "personality_surface": "...", "personality_core": "...", "biography": "...", "trauma": "...", "desire": "...", "speaking_style": "...", "sample_dialogue": "..." }
       },
       "loveInterest": {
-          "name": "${simpleSettings.loveInterest}",
+          "name": "${simpleSettings.loveInterest?.name || "對象名"}",
           "role": "攻略對象",
-          "gender": "未知",
-          "profile": { "appearance": "...", "personality_surface": "...", "personality_core": "...", "biography": "...", "trauma": "...", "desire": "..." }
+          "gender": "...",
+          "profile": { "appearance": "...", "personality_surface": "...", "personality_core": "...", "biography": "...", "trauma": "...", "desire": "...", "speaking_style": "...", "sample_dialogue": "..." }
       }
     }
     `;
@@ -379,7 +395,10 @@ export const generateInfiniteStart = async (settings, tags = [], tone = "一般"
     1. **群像開場**：主角身邊有一群人（新人/資深者）。描寫群體的恐慌 vs 主角的冷靜/瘋狂。
     2. ${mechanismDisplay}
     3. **CP 張力**：安排與攻略對象的初次交鋒（或許是對立陣營，或許是神祕大佬，或許是落難搭檔）。
-    4. **字數**：2000字以上。細節要足。
+    4. **人設防崩 (Anti-OOC)**：
+       - 嚴格遵守每個角色的【口吻/說話風格】。
+       - 隊友之間的對話要有辨識度（例如：A喜歡吐槽，B沉默寡言）。
+    5. **字數**：2000字以上。細節要足。
 
     【回傳 JSON】
     {
@@ -449,8 +468,9 @@ export const generateDungeonDesign = async (arcName, tone, tags = [], cycleNum, 
     【設計要求】
     1. **世界觀**：詭異的背景故事。
     2. **核心機制**：${mechanicReq}
-    3. **怪物/Boss**：設計雜兵與 Boss。
-    4. **結局**：普通/完美通關條件。
+    3. **特殊機制 (機率觸發)**：如果適合，可以設計一個考驗人性的機制（如：囚徒困境、信任盲區），但不必每個副本都有。
+    4. **高光時刻**：預設適合不同專長（智力/武力/運氣）隊友發揮的環節。
+    5. **結局**：普通/完美通關條件。
 
     【回傳 JSON】
     {
@@ -459,7 +479,12 @@ export const generateDungeonDesign = async (arcName, tone, tags = [], cycleNum, 
         "background_story": "...",
         "core_rules": ${isRuleBased ? '["規則1..."]' : '[]'},
         "missions": ${isRuleBased ? '[]' : '["主線任務..."]'},
-        "mechanics": { "gameplay_focus": "...", "environment": "..." },
+        "mechanics": { 
+            "gameplay_focus": "...", 
+            "environment": "...",
+            "relationship_test": "羈絆考驗機制 (可選)",
+            "role_highlights": "隊友高光機會..."
+        },
         "entities": [ { "name": "...", "description": "...", "weakness": "..." } ],
         "endings": { "normal": "...", "true": "..." }
     }
@@ -609,13 +634,14 @@ export const planInfinite = async ({
     }
 
     // 5. 遊戲機制操作邏輯 (Gameplay Ops)
+    // 5. 遊戲機制操作邏輯 (Gameplay Ops) - 人物驅動版
     const gameplayOps = (() => {
-        if (phase === "setup") return isRuleBased ? "展示【規則守則】，營造詭異感。" : "發布【主線任務】，確立生存目標。";
-        if (phase === "investigation") return isRuleBased ? "驗證規則真偽，遭遇違反規則的代價。" : "探索地圖，完成支線，遭遇怪物襲擊。";
-        if (phase === "climax") return isRuleBased ? "利用規則漏洞反殺 Boss。" : "與 Boss 進行正面決戰或極限逃生。";
-        if (phase === "resolution") return "結算獎勵，揭示副本真相。";
-        if (phase === "rest") return "主神空間休整。";
-        return "推進劇情。";
+        if (phase === "setup") return isRuleBased ? "展示【規則守則】，但重點是主角們對規則的吐槽/不屑/恐慌反應。" : "發布【主線任務】，重點描寫主角團的磨合與分歧。";
+        if (phase === "investigation") return "觸發【羈絆考驗】或【人性抉擇】。在探索中揭露隊友的過去或 CP 的默契。";
+        if (phase === "climax") return "全員高光時刻。利用團隊配合或 CP 的犧牲/爆發來破局，而不是單純靠數值碾壓。";
+        if (phase === "resolution") return "結算獎勵，但更重要的是角色關係的變化（升溫/決裂）。";
+        if (phase === "rest") return "主神空間的溫馨/曖昧日常，修復創傷。";
+        return "推進劇情，強調人與人的互動。";
     })();
 
     // 6. 呼叫 Planner
@@ -644,6 +670,9 @@ export const planInfinite = async ({
 
     ${dungeonContext}
     ${rulesContext}
+    
+    【隊友狀態】
+    ${characters.map(c => `- ${c.name}: ${c.status || '正常'}`).join('\n') || "暫無詳細隊友資訊，請根據設定發揮"}
 
     【設計圖】${typeof blueprint === 'string' ? blueprint : JSON.stringify(blueprint)}
     【前情提要】${contextSummary}
@@ -652,7 +681,8 @@ export const planInfinite = async ({
     【任務】
     1. 根據副本進度，推進劇情。
     2. **機制演繹**：${isRuleBased ? '讓主角分析規則邏輯。' : '讓主角執行任務目標。'}
-    3. 衝突設計與感情規劃。
+    3. **人物互動 (關鍵)**：本章必須包含至少一位隊友的關鍵互動，不要讓他們變成背景板。
+    4. 衝突設計與感情規劃。
 
     回傳 JSON: { "chapter_title": "...", "outline": "...", "key_clue_action": "...", "romance_moment": "...", "suggested_progress_increment": 5, "should_finish_instance": false }
     `;

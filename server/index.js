@@ -305,7 +305,9 @@ export const generateRandomSettings = async (genre, tags = [], tone = "一般", 
             "trauma": "過去的陰影/創傷",
             "desire": "核心慾望/目標",
             "fear": "最大的恐懼",
-            "charm_point": "反差萌點/小癖好"
+            "charm_point": "反差萌點/小癖好",
+            "speaking_style": "說話風格 (如：文縐縐、粗俗、簡短)",
+            "sample_dialogue": "代表台詞 (一句話)"
         }
       },
       "loveInterest": {
@@ -313,7 +315,8 @@ export const generateRandomSettings = async (genre, tags = [], tone = "一般", 
         "role": "攻略對象/反派",
         "profile": {
             "appearance": "", "personality_surface": "", "personality_core": "", 
-            "biography": "", "trauma": "", "desire": "", "fear": "", "charm_point": ""
+            "biography": "", "trauma": "", "desire": "", "fear": "", "charm_point": "",
+            "speaking_style": "", "sample_dialogue": ""
         }
       }
     }
@@ -367,7 +370,8 @@ export const generateNovelStart = async (genre, settings, tags = [], tone = "一
     2. **黃金開篇**：衝突開場 (In Media Res)，直接切入事件。
     3. **群像與配角**：請自然引入 1-2 位功能性配角。務必賦予配角鮮明的特徵。
     4. **有意義的衝突**：主角遭遇的麻煩必須阻礙他的核心渴望，迫使他行動。
-    5. ${extraInstruction}
+    5. **人設防崩 (Anti-OOC)**：嚴格遵守每個角色的【口吻/說話風格】。
+    6. ${extraInstruction}
 
     【回傳 JSON 格式】
     {
@@ -652,16 +656,48 @@ app.post('/api/generate-chapter', async (req, res) => {
 
 const ensureDetailedSettings = async (genre, settings, tags = [], tone = "一般", category = "BG", useDeepSeek = false) => {
     const model = getGeminiModel(true);
+    const toneDesc = getToneInstruction(tone);
+    const styleGuide = `風格：${tags.join('、')} | ${toneDesc} | 類別：${category}`;
+
+    const summaryText = settings.summary ? `簡介：${settings.summary}` : "";
+    const tropeText = settings.trope ? `核心梗：${settings.trope}` : "";
+    const coreInfo = [summaryText, tropeText].filter(Boolean).join('\n    ') || "暫無具體簡介";
+
     const prompt = `
-    請為小說補充詳細設定。
-    標題：${settings.title}
-    題材：${genre}
+    你是一位專業的小說架構師。請根據用戶提供的初步構想，補充並完善詳細的小說設定。
     
+    【用戶提供資訊】
+    標題：${settings.title || "未命名"}
+    題材：${genre || "未定義"}
+    ${styleGuide}
+    ${coreInfo}
+    
+    主角姓名：${settings.protagonist?.name || "未定"}
+    主角初步設定：${JSON.stringify(settings.protagonist?.profile || {})}
+    
+    對象姓名：${settings.loveInterest?.name || "未定"}
+    對象初步設定：${JSON.stringify(settings.loveInterest?.profile || {})}
+
+    【補全任務】
+    1. **深度人設**：根據現有資訊，補全外貌、性格（表/裡）、過去創傷、核心慾望。
+    2. **說話風格 (Anti-OOC)**：設計獨特的說話方式與代表台詞。
+    3. **世界觀與主線**：完善世界觀真相與結局走向。
+
     請回傳 JSON:
     {
         "design_blueprint": { "main_goal": "...", "world_truth": "...", "ending_vision": "..." },
-        "protagonist": { "profile": { "appearance": "...", "personality_surface": "...", "personality_core": "...", "biography": "..." }, "gender": "..." },
-        "loveInterest": { "profile": { "appearance": "...", "personality_surface": "...", "personality_core": "...", "biography": "..." }, "gender": "..." }
+        "protagonist": { 
+            "name": "${settings.protagonist?.name || "主角名"}",
+            "role": "主角",
+            "gender": "...",
+            "profile": { "appearance": "...", "personality_surface": "...", "personality_core": "...", "biography": "...", "speaking_style": "...", "sample_dialogue": "..." }
+        },
+        "loveInterest": { 
+            "name": "${settings.loveInterest?.name || "對象名"}",
+            "role": "攻略對象",
+            "gender": "...",
+            "profile": { "appearance": "...", "personality_surface": "...", "personality_core": "...", "biography": "...", "speaking_style": "...", "sample_dialogue": "..." }
+        }
     }
     `;
     try {
@@ -680,7 +716,7 @@ const refineCharacterProfile = async (charData, novelContext, useDeepSeek = fals
     
     回傳 JSON:
     {
-        "profile": { "appearance": "...", "personality_surface": "...", "personality_core": "...", "biography": "..." }
+        "profile": { "appearance": "...", "personality_surface": "...", "personality_core": "...", "biography": "...", "speaking_style": "...", "sample_dialogue": "..." }
     }
     `;
     try {

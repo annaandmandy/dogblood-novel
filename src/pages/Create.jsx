@@ -176,8 +176,8 @@ export default function Create() {
     };
 
     const handleCreate = async () => {
-        if (!settings.title || !settings.protagonist) {
-            alert('請填寫完整設定');
+        if (!settings.title || !settings.protagonist || !settings.loveInterest || !settings.trope || !settings.summary) {
+            alert('所有欄位不得為空！請填寫完整設定。');
             return;
         }
 
