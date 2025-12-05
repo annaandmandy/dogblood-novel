@@ -1127,20 +1127,20 @@ export default function Reader() {
                                                     <h3 className="font-bold flex items-center gap-2">
                                                         {char.name}
                                                         <span className="text-xs opacity-60 font-normal">({char.role})</span>
-                                                        {user && user.id === novel.owner_id && (
-                                                            <button onClick={() => openEditCharModal(char)} className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:text-blue-400">
-                                                                <Edit2 size={12} />
-                                                            </button>
-                                                        )}
                                                     </h3>
                                                     <span className={`text-[10px] px-1.5 py-0.5 rounded ${char.status.includes('死') || char.status === 'Dead' ? 'bg-red-900/30 text-red-400' : 'bg-green-900/30 text-green-400'}`}>
                                                         {char.status === 'Alive' ? '存活' : char.status}
                                                     </span>
                                                 </div>
                                                 {user && user.id === novel.owner_id && (
-                                                    <button onClick={() => handleDeleteCharacter(char.id)} className="opacity-60 hover:text-red-400">
-                                                        <Trash2 size={16} />
-                                                    </button>
+                                                    <div className="flex gap-2">
+                                                        <button onClick={() => openEditCharModal(char)} className="opacity-60 hover:text-blue-400">
+                                                            <Edit2 size={16} />
+                                                        </button>
+                                                        <button onClick={() => handleDeleteCharacter(char.id)} className="opacity-60 hover:text-red-400">
+                                                            <Trash2 size={16} />
+                                                        </button>
+                                                    </div>
                                                 )}
                                             </div>
                                             <p className="text-sm opacity-80 mt-2">{char.description}</p>
