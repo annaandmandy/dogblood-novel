@@ -96,8 +96,11 @@ export const AuthProvider = ({ children }) => {
         });
     };
 
+    const value = { user, signUp, signIn, signOut, signInWithGoogle, loading };
+    console.log("AuthProvider value:", value);
+
     return (
-        <AuthContext.Provider value={{ user, signUp, signIn, signOut, signInWithGoogle, loading }}>
+        <AuthContext.Provider value={value}>
             {!loading && children}
         </AuthContext.Provider>
     );

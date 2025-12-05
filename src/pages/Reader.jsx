@@ -341,6 +341,8 @@ export default function Reader() {
             const aiResponse = await generateNextChapter(
                 {
                     ...novel.settings,
+                    id: novel.id,
+                    title: novel.title,
                     genre: novel.genre,
                     targetEndingChapter: novel.target_ending_chapter,
                     currentChapterIndex: lastChapter.chapter_index

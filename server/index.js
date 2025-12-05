@@ -1,8 +1,10 @@
+console.log("Starting server initialization...");
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { getGeminiModel, cleanJson, callDeepSeek, ANTI_CLICHE_INSTRUCTIONS } from './lib/llm.js';
 import { planInfinite } from './agents/infinite/planInfinite.js';
+import { writeInfiniteChapter } from './agents/infinite/writeInfiniteChapter.js';
 
 dotenv.config();
 
@@ -234,10 +236,32 @@ const planChapter = async (director, blueprint, contextSummary, memories = [], c
 
 const polishContent = async (draft, tone, pov) => {
     const model = getGeminiModel(false);
-    const editorPrompt = `你是一位資深的網文主編。請對以下初稿進行【深度潤色】。\n${ANTI_CLICHE_INSTRUCTIONS}\n【潤色目標】去除AI味，去除冗餘，跟重複劇情，增強畫面感，符合${tone}基調。\n[初稿]\n${draft}`;
+    const editorPrompt = `你是一位資深的網文主編。請對以下初稿進行【深度潤色】。
+
+${ANTI_CLICHE_INSTRUCTIONS}
+
+【潤色目標】
+1. **去除AI味**：消除機械重複的句式，增加口語化與生動感。
+2. **去除冗餘**：刪除無意義的過渡句與重複的劇情回顧。
+3. **增強畫面感**：多用感官描寫（視覺、聽覺、觸覺）。
+4. **符合基調**：${tone}。
+5. **嚴格輸出格式**：**只輸出潤色後的小說正文**。絕對不要輸出「【深度潤色版】」、「以下是潤色後的內容」等任何前言後語。不要輸出標題。
+
+[初稿]
+${draft}`;
+
     try {
         const result = await model.generateContent(editorPrompt);
-        return result.response.text();
+        let polished = result.response.text();
+
+        // Post-processing to remove common AI prefixes
+        polished = polished.replace(/^【.*?】\s*/g, '')
+            .replace(/^\[.*?\]\s*/g, '')
+            .replace(/^以下是.*?\n/g, '')
+            .replace(/^Here is.*?\n/g, '')
+            .trim();
+
+        return polished;
     } catch (e) { return draft; }
 };
 
@@ -665,11 +689,21 @@ const refineCharacterProfile = async (charData, novelContext, useDeepSeek = fals
     } catch (e) { return {}; }
 };
 
+import { generateInfiniteSettings, generateInfiniteStart, ensureInfiniteSettings } from './agents/infinite/planInfinite.js';
+
+// ... (existing code)
+
 app.post('/api/ensure-detailed-settings', async (req, res) => {
     try {
         const { genre, settings, tags, tone, category, useDeepSeek } = req.body;
-        const result = await ensureDetailedSettings(genre, settings, tags, tone, category, useDeepSeek);
-        res.json(result);
+
+        if (genre === "無限流") {
+            const result = await ensureInfiniteSettings(settings, tags, tone, category, useDeepSeek);
+            res.json(result);
+        } else {
+            const result = await ensureDetailedSettings(genre, settings, tags, tone, category, useDeepSeek);
+            res.json(result);
+        }
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
@@ -685,7 +719,7 @@ app.post('/api/refine-character', async (req, res) => {
     }
 });
 
-import { generateInfiniteSettings, generateInfiniteStart } from './agents/infinite/planInfinite.js';
+
 
 app.post('/api/generate-settings', async (req, res) => {
     try {

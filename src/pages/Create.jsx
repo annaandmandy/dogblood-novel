@@ -244,7 +244,15 @@ export default function Create() {
                     title: settings.title,
                     genre: genre, // Save specific genre (e.g. '無限流') so gemini.js works correctly
                     summary: settings.summary || settings.trope,
-                    settings: { ...settings, tone, pov, category, design_blueprint: designBlueprint, useDeepSeek }, // Save category, blueprint and model preference in settings
+                    settings: {
+                        ...settings,
+                        tone,
+                        pov,
+                        category,
+                        design_blueprint: designBlueprint,
+                        useDeepSeek,
+                        plot_state: startResponse.plot_state // Save the initial plot state!
+                    },
                     tags: selectedTags,
                     target_ending_chapter: parseInt(targetEndingChapter) || 120,
                     is_public: false
@@ -348,6 +356,35 @@ export default function Create() {
                 .insert(charactersToInsert);
 
             if (charactersError) throw charactersError;
+
+            // 5. Save Initial Dungeon (Infinite Flow Only)
+            if (genre === '無限流' && apiSettings.first_dungeon_setting) {
+                const fd = apiSettings.first_dungeon_setting;
+                // Generate rule logic object if not present (simple fallback)
+                const ruleLogic = {
+                    title: "規則",
+                    rules: fd.core_rules || [],
+                    hidden_truth: "未知"
+                };
+
+                const { error: dungeonError } = await supabase
+                    .from('dungeons')
+                    .insert({
+                        novel_id: novel.id,
+                        name: fd.dungeon_name,
+                        cycle_num: 1,
+                        difficulty: fd.difficulty || '未知',
+                        background_story: fd.background_story,
+                        mechanics: fd.mechanics,
+                        core_rules: fd.core_rules,
+                        rule_logic: ruleLogic,
+                        entities: fd.entities, // If available in settings
+                        endings: fd.endings,   // If available in settings
+                        status: 'active'
+                    });
+
+                if (dungeonError) console.error("Failed to save initial dungeon:", dungeonError);
+            }
 
             // Navigate to Reader
             navigate(`/read/${novel.id}`);

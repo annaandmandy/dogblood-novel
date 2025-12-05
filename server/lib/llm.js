@@ -19,7 +19,7 @@ const safetySettings = [
 ];
 
 export const getGeminiModel = (jsonMode = false) => genAI.getGenerativeModel({
-    model: "gemini-2.5-flash-preview-09-2025",
+    model: "gemini-2.0-flash-exp",
     safetySettings: safetySettings,
     generationConfig: jsonMode ? { responseMimeType: "application/json" } : {},
 });
@@ -106,3 +106,23 @@ export const ANTI_CLICHE_INSTRUCTIONS = `
 5. **無限流修正**：
    - 主神空間是「殘酷的角鬥場」，不是「電腦系統」。副本具有高度隨機性與致命性。
 `;
+
+export const getToneInstruction = (tone) => {
+    switch (tone) {
+        case "暗黑": return "【基調：暗黑】強調壓抑、絕望、血腥與人性的扭曲。描寫要赤裸、殘酷，不避諱暴力與死亡。";
+        case "輕鬆": return "【基調：輕鬆】強調幽默、吐槽、反差萌。在緊張的劇情中穿插笑點，角色互動要有趣。";
+        case "正劇": return "【基調：正劇】強調邏輯嚴密、情感厚重、史詩感。拒絕無厘頭，注重劇情的深度與合理性。";
+        case "甜寵": return "【基調：甜寵】強調男女主角的甜蜜互動，發糖為主，虐戀為輔。";
+        case "虐戀": return "【基調：虐戀】強調情感的糾葛與痛苦，誤會、犧牲、愛而不得。";
+        default: return "【基調：一般】平衡劇情與情感，節奏張弛有度。";
+    }
+};
+
+export const getPovInstruction = (pov) => {
+    switch (pov) {
+        case "女主": return "【視角：女主】以女主角為核心視角。多描寫她的內心獨白、情感變化與感官體驗。";
+        case "男主": return "【視角：男主】以男主角為核心視角。多描寫他的決策過程、行動細節與對局勢的判斷。";
+        case "雙視角": return "【視角：雙視角】在章節中適度切換男女主角的視角，展現雙方的心理活動。";
+        default: return "【視角：上帝】全知視角，客觀描述場景與所有角色的行動。";
+    }
+};
