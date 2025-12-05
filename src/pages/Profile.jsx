@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
-import { LogOut, User, Settings, Heart, Edit2, Save, X, Tag } from 'lucide-react';
+import { LogOut, User, Settings, Heart, Edit2, Save, X, Tag, Globe } from 'lucide-react';
+import { useLanguage } from '../contexts/LanguageContext';
 
 const AVAILABLE_TAGS = [
     "重生", "穿越", "救贖", "系統", "穿書", "馬甲",
@@ -13,6 +14,7 @@ const AVAILABLE_TAGS = [
 
 export default function Profile() {
     const { user, signOut } = useAuth();
+    const { t, language, changeLanguage } = useLanguage();
     const navigate = useNavigate();
 
     const [profile, setProfile] = useState(null);
@@ -108,14 +110,14 @@ export default function Profile() {
                     <User size={40} />
                 </div>
                 <div className="text-center space-y-2">
-                    <h2 className="text-xl font-bold text-slate-200">尚未登入</h2>
-                    <p className="text-slate-400 text-sm">登入以同步您的閱讀進度與創作</p>
+                    <h2 className="text-xl font-bold text-slate-200">{t('profile.not_logged_in')}</h2>
+                    <p className="text-slate-400 text-sm">{t('profile.login_sync')}</p>
                 </div>
                 <button
                     onClick={() => navigate('/auth')}
                     className="px-8 py-3 bg-purple-600 hover:bg-purple-500 text-white rounded-full font-bold transition-all shadow-lg shadow-purple-900/20"
                 >
-                    立即登入 / 註冊
+                    {t('profile.login_btn')}
                 </button>
             </div>
         );
@@ -135,11 +137,11 @@ export default function Profile() {
                                 type="text"
                                 value={formData.username}
                                 onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-                                placeholder="設定暱稱"
+                                placeholder={t('profile.set_nickname')}
                                 className="bg-slate-900 border border-slate-700 rounded px-3 py-1 text-lg font-bold text-white focus:outline-none focus:border-purple-500 w-full mb-1"
                             />
                         ) : (
-                            <h1 className="text-2xl font-bold text-white">{profile?.username || '未設定暱稱'}</h1>
+                            <h1 className="text-2xl font-bold text-white">{profile?.username || t('profile.no_nickname')}</h1>
                         )}
                         <p className="text-slate-400 text-sm">{user.email}</p>
                     </div>
@@ -174,19 +176,19 @@ export default function Profile() {
             <section className="space-y-4">
                 <div className="flex items-center gap-2 text-slate-300 font-bold">
                     <User size={18} />
-                    自我介紹
+                    {t('profile.bio')}
                 </div>
                 {isEditing ? (
                     <textarea
                         value={formData.bio}
                         onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
-                        placeholder="寫一段關於你的介紹..."
+                        placeholder={t('profile.bio_placeholder')}
                         className="w-full h-32 bg-slate-900 border border-slate-800 rounded-xl p-4 text-slate-200 focus:outline-none focus:border-purple-500 resize-none"
                     />
                 ) : (
                     <div className="bg-slate-900/30 rounded-xl p-4 border border-slate-800/50 min-h-[5rem]">
                         <p className="text-slate-300 leading-relaxed whitespace-pre-wrap">
-                            {profile?.bio || "這位用戶很懶，什麼都沒寫..."}
+                            {profile?.bio || t('profile.bio_empty')}
                         </p>
                     </div>
                 )}
@@ -196,7 +198,7 @@ export default function Profile() {
             <section className="space-y-4">
                 <div className="flex items-center gap-2 text-slate-300 font-bold">
                     <Tag size={18} />
-                    偏好標籤
+                    {t('profile.tags')}
                 </div>
 
                 {isEditing ? (
@@ -210,7 +212,7 @@ export default function Profile() {
                             ))}
                         </div>
                         <div className="border-t border-slate-800 pt-4">
-                            <p className="text-xs text-slate-500 mb-2">點擊選擇標籤 (最多 10 個)</p>
+                            <p className="text-xs text-slate-500 mb-2">{t('profile.tags_select')}</p>
                             <div className="flex flex-wrap gap-2 max-h-48 overflow-y-auto">
                                 {AVAILABLE_TAGS.map(tag => (
                                     <button
@@ -237,7 +239,7 @@ export default function Profile() {
                                 </span>
                             ))
                         ) : (
-                            <span className="text-slate-500 text-sm">尚未選擇標籤</span>
+                            <span className="text-slate-500 text-sm">{t('profile.tags_empty')}</span>
                         )}
                     </div>
                 )}
@@ -247,13 +249,13 @@ export default function Profile() {
             <section className="space-y-4">
                 <div className="flex items-center gap-2 text-slate-300 font-bold">
                     <Settings size={18} />
-                    閱讀設定 (預設)
+                    {t('profile.reading_settings')}
                 </div>
 
                 <div className="bg-slate-900/50 rounded-xl border border-slate-800 p-4 space-y-4">
                     {/* Font Size */}
                     <div className="flex justify-between items-center">
-                        <span className="text-slate-400">字體大小</span>
+                        <span className="text-slate-400">{t('profile.font_size')}</span>
                         {isEditing ? (
                             <div className="flex items-center gap-2">
                                 <button
@@ -273,28 +275,28 @@ export default function Profile() {
 
                     {/* Font Family */}
                     <div className="flex justify-between items-center">
-                        <span className="text-slate-400">字型</span>
+                        <span className="text-slate-400">{t('profile.font_family')}</span>
                         {isEditing ? (
                             <select
                                 value={formData.preferences.fontFamily}
                                 onChange={(e) => setFormData({ ...formData, preferences: { ...formData.preferences, fontFamily: e.target.value } })}
                                 className="bg-slate-800 text-slate-200 border border-slate-700 rounded px-2 py-1 focus:outline-none focus:border-purple-500"
                             >
-                                <option value="font-serif">襯線體 (Serif)</option>
-                                <option value="font-sans">無襯線體 (Sans)</option>
-                                <option value="font-mono">等寬體 (Mono)</option>
+                                <option value="font-serif">{t('font.serif')} (Serif)</option>
+                                <option value="font-sans">{t('font.sans')} (Sans)</option>
+                                <option value="font-mono">{t('font.mono')} (Mono)</option>
                             </select>
                         ) : (
                             <span className="text-slate-200">
-                                {profile?.preferences?.fontFamily === 'font-serif' ? '襯線體' :
-                                    profile?.preferences?.fontFamily === 'font-sans' ? '無襯線體' : '等寬體'}
+                                {profile?.preferences?.fontFamily === 'font-serif' ? t('font.serif') :
+                                    profile?.preferences?.fontFamily === 'font-sans' ? t('font.sans') : t('font.mono')}
                             </span>
                         )}
                     </div>
 
                     {/* Theme */}
                     <div className="flex justify-between items-center">
-                        <span className="text-slate-400">主題</span>
+                        <span className="text-slate-400">{t('profile.theme')}</span>
                         {isEditing ? (
                             <div className="flex gap-2">
                                 {['dark', 'light', 'sepia', 'black'].map(theme => (
@@ -319,11 +321,38 @@ export default function Profile() {
             <div className="border-t border-slate-800 pt-6 space-y-4">
                 <section className="bg-slate-900/50 rounded-xl border border-slate-800 overflow-hidden">
                     <div className="p-4 border-b border-slate-800 font-bold text-slate-300 flex items-center gap-2">
-                        <Settings size={18} /> 一般設定
+                        <Settings size={18} /> {t('profile.general_settings')}
                     </div>
                     <div className="p-4 space-y-4">
+                        {/* Language Selector */}
                         <div className="flex justify-between items-center">
-                            <span className="text-slate-400">App 版本</span>
+                            <span className="text-slate-400 flex items-center gap-2">
+                                <Globe size={16} /> {t('profile.language')}
+                            </span>
+                            <div className="flex rounded-lg overflow-hidden border border-slate-700">
+                                <button
+                                    onClick={() => changeLanguage('zh-TW')}
+                                    className={`px-3 py-1 text-xs ${language === 'zh-TW' ? 'bg-purple-600 text-white' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}
+                                >
+                                    繁體
+                                </button>
+                                <button
+                                    onClick={() => changeLanguage('zh-CN')}
+                                    className={`px-3 py-1 text-xs ${language === 'zh-CN' ? 'bg-purple-600 text-white' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}
+                                >
+                                    简体
+                                </button>
+                                <button
+                                    onClick={() => changeLanguage('en')}
+                                    className={`px-3 py-1 text-xs ${language === 'en' ? 'bg-purple-600 text-white' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}
+                                >
+                                    EN
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="flex justify-between items-center">
+                            <span className="text-slate-400">{t('profile.app_version')}</span>
                             <span className="text-slate-200">v0.1.0 (Beta)</span>
                         </div>
                     </div>
@@ -333,7 +362,7 @@ export default function Profile() {
                     onClick={handleSignOut}
                     className="w-full p-4 rounded-xl border border-red-500/20 bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors flex items-center justify-center gap-2 font-bold"
                 >
-                    <LogOut size={20} /> 登出
+                    <LogOut size={20} /> {t('profile.logout')}
                 </button>
             </div>
         </div>

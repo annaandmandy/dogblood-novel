@@ -49,3 +49,7 @@ export const generateNovelStart = async (genre, settings, tags = [], tone = "一
 export const generateNextChapter = async (novelContext, prevText, characters = [], memories = [], clues = [], tags = [], tone = "一般", pov = "女主", lastPlotState = null, useDeepSeek = false) => {
     return callApi('generate-chapter', { novelContext, prevText, characters, memories, clues, tags, tone, pov, lastPlotState, useDeepSeek });
 };
+
+export const translateContent = async (text, targetLang = 'English') => {
+    return callApi('translate', { text, targetLang });
+};

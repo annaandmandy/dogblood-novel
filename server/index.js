@@ -789,6 +789,34 @@ app.post('/api/generate-start', async (req, res) => {
     }
 });
 
+app.post('/api/translate', async (req, res) => {
+    const { text, targetLang = 'English' } = req.body;
+    try {
+        const prompt = `
+        You are a professional literary translator.
+        Translate the following novel excerpt to ${targetLang}.
+        
+        Requirements:
+        1. Maintain the original tone, style, and flow.
+        2. If it's a "dogblood" (melodramatic) or "infinite flow" novel, use appropriate genre terminology.
+        3. Output ONLY the translated text, no conversational filler.
+        4. Keep Markdown formatting (headings, bold, etc.) intact.
+
+        Text to translate:
+        ${text}
+        `;
+
+        const model = getGeminiModel(true); // Use Flash for speed
+        const result = await model.generateContent(prompt);
+        const translatedText = result.response.text();
+
+        res.json({ content: translatedText });
+    } catch (error) {
+        console.error("Translation error:", error);
+        res.status(500).json({ error: "Translation failed" });
+    }
+});
+
 app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
+    console.log(`Server running on port ${PORT}`);
 });

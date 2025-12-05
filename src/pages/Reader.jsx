@@ -1,9 +1,12 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ChevronLeft, Info, Settings, Share, BookOpen, X, Trash2, Plus, Edit2, AlertTriangle, Type, Palette, List, ToggleLeft, ToggleRight, Save, User, Play, Pause, Volume2, Timer } from 'lucide-react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useParams, Link } from 'react-router-dom';
+import { ChevronLeft, Info, Settings, Share, BookOpen, X, Trash2, Plus, Edit2, AlertTriangle, Type, Palette, List, ToggleLeft, ToggleRight, Save, User, Play, Pause, Volume2, Timer, Globe } from 'lucide-react';
+import { supabase } from '../lib/supabase';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import { generateNextChapter, refineCharacterProfile } from '../lib/gemini';
+import { generateNextChapter, refineCharacterProfile, translateContent } from '../lib/gemini';
 import ReactMarkdown from 'react-markdown';
 
 
@@ -47,6 +50,11 @@ export default function Reader() {
     const [generating, setGenerating] = useState(false);
     const [generationError, setGenerationError] = useState(null);
     const isPrefetching = useRef(false);
+
+    // Translation State
+    const [isTranslated, setIsTranslated] = useState(false);
+    const [translationCache, setTranslationCache] = useState({}); // { chapterId: translatedText }
+    const [translating, setTranslating] = useState(false);
 
     // TTS & Auto-Turn State
     const [isPlaying, setIsPlaying] = useState(false);
@@ -803,7 +811,14 @@ export default function Reader() {
                                 }}
                             >
                                 {(() => {
-                                    let text = currentChapter.content?.trim() || '';
+                                    let text = '';
+                                    if (isTranslated && currentChapter) {
+                                        // Show translated text if available, otherwise show loading or original
+                                        text = translationCache[currentChapter.id] || "Translating...";
+                                    } else {
+                                        text = currentChapter.content?.trim() || '';
+                                    }
+
                                     // Fix: Handle cases where JSON was saved directly to DB
                                     if (text.startsWith('{') && text.includes('"content"')) {
                                         try {
@@ -861,6 +876,40 @@ export default function Reader() {
                                         <ChevronLeft size={16} /> 返回書庫
                                     </Link>
                                 </div>
+                            </section>
+
+                            {/* Translation */}
+                            <section>
+                                <h4 className="text-xs font-bold opacity-50 mb-3 uppercase tracking-wider">語言 (Language)</h4>
+                                <button
+                                    onClick={async () => {
+                                        if (isTranslated) {
+                                            setIsTranslated(false);
+                                        } else {
+                                            setIsTranslated(true);
+                                            // Check cache
+                                            if (!translationCache[currentChapter.id]) {
+                                                setTranslating(true);
+                                                try {
+                                                    const res = await translateContent(currentChapter.content);
+                                                    setTranslationCache(prev => ({ ...prev, [currentChapter.id]: res.content }));
+                                                } catch (e) {
+                                                    console.error("Translation failed", e);
+                                                    alert("翻譯失敗");
+                                                    setIsTranslated(false);
+                                                } finally {
+                                                    setTranslating(false);
+                                                }
+                                            }
+                                        }
+                                        setShowMenu(false);
+                                    }}
+                                    className={`w-full p-3 rounded-lg border ${theme.border} flex items-center justify-center gap-2 hover:opacity-80 ${isTranslated ? 'bg-purple-600 text-white border-purple-600' : ''}`}
+                                >
+                                    <Globe size={16} />
+                                    {isTranslated ? "顯示原文 (Show Original)" : "翻譯成英文 (Translate to English)"}
+                                    {translating && <span className="animate-pulse">...</span>}
+                                </button>
                             </section>
 
                             {/* AI Model Selection */}
@@ -1071,269 +1120,273 @@ export default function Reader() {
                             </section>
                         </div>
                     </div>
-                </div>
-            )}
+                </div >
+            )
+            }
 
             {/* Wiki Modal */}
-            {showWiki && (
-                <div className={`absolute inset-0 z-50 ${theme.bg} ${theme.text} flex flex-col pt-12 md:pt-0`}>
-                    <div className={`flex justify-between items-center p-4 border-b ${theme.border}`}>
-                        <h2 className="text-lg font-bold">Wiki 資料庫</h2>
-                        <button onClick={() => setShowWiki(false)} className={`p-2 rounded-full ${theme.ui}`}><X size={20} /></button>
-                    </div>
+            {
+                showWiki && (
+                    <div className={`absolute inset-0 z-50 ${theme.bg} ${theme.text} flex flex-col pt-12 md:pt-0`}>
+                        <div className={`flex justify-between items-center p-4 border-b ${theme.border}`}>
+                            <h2 className="text-lg font-bold">Wiki 資料庫</h2>
+                            <button onClick={() => setShowWiki(false)} className={`p-2 rounded-full ${theme.ui}`}><X size={20} /></button>
+                        </div>
 
-                    {/* Wiki Tabs */}
-                    <div className={`flex border-b ${theme.border}`}>
-                        {['overview', 'characters', 'memory'].map(tab => (
-                            <button
-                                key={tab}
-                                onClick={() => setWikiTab(tab)}
-                                className={`flex-1 py-3 text-sm font-medium capitalize ${wikiTab === tab ? 'text-purple-500 border-b-2 border-purple-500' : 'opacity-60'}`}
-                            >
-                                {tab === 'overview' ? '總覽' : tab === 'characters' ? '角色' : '記憶'}
-                            </button>
-                        ))}
-                    </div>
+                        {/* Wiki Tabs */}
+                        <div className={`flex border-b ${theme.border}`}>
+                            {['overview', 'characters', 'memory'].map(tab => (
+                                <button
+                                    key={tab}
+                                    onClick={() => setWikiTab(tab)}
+                                    className={`flex-1 py-3 text-sm font-medium capitalize ${wikiTab === tab ? 'text-purple-500 border-b-2 border-purple-500' : 'opacity-60'}`}
+                                >
+                                    {tab === 'overview' ? '總覽' : tab === 'characters' ? '角色' : '記憶'}
+                                </button>
+                            ))}
+                        </div>
 
-                    {/* Wiki Content */}
-                    <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                        {/* Wiki Content */}
+                        <div className="flex-1 overflow-y-auto p-4 space-y-4">
 
-                        {/* Overview Tab */}
-                        {wikiTab === 'overview' && (
-                            <div className="space-y-4">
-                                <div className={`p-4 rounded-xl border ${theme.border} ${theme.ui}`}>
-                                    <h3 className="text-sm font-bold text-purple-500 mb-2">劇情摘要</h3>
-                                    <p className="text-sm opacity-80 leading-relaxed">{novel.summary}</p>
+                            {/* Overview Tab */}
+                            {wikiTab === 'overview' && (
+                                <div className="space-y-4">
+                                    <div className={`p-4 rounded-xl border ${theme.border} ${theme.ui}`}>
+                                        <h3 className="text-sm font-bold text-purple-500 mb-2">劇情摘要</h3>
+                                        <p className="text-sm opacity-80 leading-relaxed">{novel.summary}</p>
+                                    </div>
+                                    <div className={`p-4 rounded-xl border ${theme.border} ${theme.ui}`}>
+                                        <h3 className="text-sm font-bold text-blue-500 mb-2">核心梗</h3>
+                                        <p className="text-sm opacity-80">{novel.settings.trope}</p>
+                                    </div>
                                 </div>
-                                <div className={`p-4 rounded-xl border ${theme.border} ${theme.ui}`}>
-                                    <h3 className="text-sm font-bold text-blue-500 mb-2">核心梗</h3>
-                                    <p className="text-sm opacity-80">{novel.settings.trope}</p>
-                                </div>
-                            </div>
-                        )}
+                            )}
 
-                        {/* Characters Tab */}
-                        {wikiTab === 'characters' && (
-                            <div className="space-y-3">
-                                {user && user.id === novel.owner_id && (
-                                    <button onClick={openAddCharModal} className={`w-full py-2 border border-dashed ${theme.border} rounded-lg opacity-60 text-sm hover:opacity-100 flex items-center justify-center gap-2`}>
-                                        <Plus size={16} /> 新增角色
-                                    </button>
-                                )}
-                                {characters
-                                    .filter(c => c.status !== 'Retired' && c.status !== 'Exiting') // Hide Retired and Exiting from UI (looks deleted to user)
-                                    .map(char => (
-                                        <div key={char.id} className={`p-4 rounded-xl border ${theme.border} ${theme.ui} relative group`}>
-                                            <div className="flex justify-between items-start">
-                                                <div>
-                                                    <h3 className="font-bold flex items-center gap-2">
-                                                        {char.name}
-                                                        <span className="text-xs opacity-60 font-normal">({char.role})</span>
-                                                    </h3>
-                                                    <span className={`text-[10px] px-1.5 py-0.5 rounded ${char.status.includes('死') || char.status === 'Dead' ? 'bg-red-900/30 text-red-400' : 'bg-green-900/30 text-green-400'}`}>
-                                                        {char.status === 'Alive' ? '存活' : char.status}
-                                                    </span>
+                            {/* Characters Tab */}
+                            {wikiTab === 'characters' && (
+                                <div className="space-y-3">
+                                    {user && user.id === novel.owner_id && (
+                                        <button onClick={openAddCharModal} className={`w-full py-2 border border-dashed ${theme.border} rounded-lg opacity-60 text-sm hover:opacity-100 flex items-center justify-center gap-2`}>
+                                            <Plus size={16} /> 新增角色
+                                        </button>
+                                    )}
+                                    {characters
+                                        .filter(c => c.status !== 'Retired' && c.status !== 'Exiting') // Hide Retired and Exiting from UI (looks deleted to user)
+                                        .map(char => (
+                                            <div key={char.id} className={`p-4 rounded-xl border ${theme.border} ${theme.ui} relative group`}>
+                                                <div className="flex justify-between items-start">
+                                                    <div>
+                                                        <h3 className="font-bold flex items-center gap-2">
+                                                            {char.name}
+                                                            <span className="text-xs opacity-60 font-normal">({char.role})</span>
+                                                        </h3>
+                                                        <span className={`text-[10px] px-1.5 py-0.5 rounded ${char.status.includes('死') || char.status === 'Dead' ? 'bg-red-900/30 text-red-400' : 'bg-green-900/30 text-green-400'}`}>
+                                                            {char.status === 'Alive' ? '存活' : char.status}
+                                                        </span>
+                                                    </div>
+                                                    {user && user.id === novel.owner_id && (
+                                                        <div className="flex gap-2">
+                                                            <button onClick={() => openEditCharModal(char)} className="opacity-60 hover:text-blue-400">
+                                                                <Edit2 size={16} />
+                                                            </button>
+                                                            <button onClick={() => handleDeleteCharacter(char.id)} className="opacity-60 hover:text-red-400">
+                                                                <Trash2 size={16} />
+                                                            </button>
+                                                        </div>
+                                                    )}
                                                 </div>
+                                                <p className="text-sm opacity-80 mt-2">{char.description}</p>
+                                            </div>
+                                        ))}
+                                </div>
+                            )}
+
+                            {/* Memory Tab */}
+                            {wikiTab === 'memory' && (
+                                <div className="space-y-3">
+                                    {user && user.id === novel.owner_id && (
+                                        <>
+                                            <div className="bg-yellow-900/10 border border-yellow-900/30 p-3 rounded-lg flex gap-2 items-start">
+                                                <AlertTriangle size={16} className="text-yellow-500 shrink-0 mt-0.5" />
+                                                <p className="text-xs text-yellow-500/80">修改記憶可能會導致 AI 生成的故事前後不連貫，請謹慎操作。</p>
+                                            </div>
+                                            <button onClick={handleAddMemory} className={`w-full py-2 border border-dashed ${theme.border} rounded-lg opacity-60 text-sm hover:opacity-100 flex items-center justify-center gap-2`}>
+                                                <Plus size={16} /> 新增記憶節點
+                                            </button>
+                                        </>
+                                    )}
+                                    {memories.map(mem => (
+                                        <div key={mem.id} className={`p-4 rounded-xl border ${theme.border} ${theme.ui}`}>
+                                            <div className="flex justify-between items-start mb-2">
+                                                <span className="text-[10px] opacity-50">{new Date(mem.created_at).toLocaleDateString()}</span>
                                                 {user && user.id === novel.owner_id && (
                                                     <div className="flex gap-2">
-                                                        <button onClick={() => openEditCharModal(char)} className="opacity-60 hover:text-blue-400">
-                                                            <Edit2 size={16} />
-                                                        </button>
-                                                        <button onClick={() => handleDeleteCharacter(char.id)} className="opacity-60 hover:text-red-400">
-                                                            <Trash2 size={16} />
-                                                        </button>
+                                                        <button onClick={() => handleEditMemory(mem)} className="opacity-60 hover:text-blue-400"><Edit2 size={14} /></button>
+                                                        <button onClick={() => handleDeleteMemory(mem.id)} className="opacity-60 hover:text-red-400"><Trash2 size={14} /></button>
                                                     </div>
                                                 )}
                                             </div>
-                                            <p className="text-sm opacity-80 mt-2">{char.description}</p>
+                                            <p className="text-sm opacity-80">{mem.content}</p>
                                         </div>
                                     ))}
-                            </div>
-                        )}
+                                </div>
+                            )}
 
-                        {/* Memory Tab */}
-                        {wikiTab === 'memory' && (
-                            <div className="space-y-3">
-                                {user && user.id === novel.owner_id && (
-                                    <>
-                                        <div className="bg-yellow-900/10 border border-yellow-900/30 p-3 rounded-lg flex gap-2 items-start">
-                                            <AlertTriangle size={16} className="text-yellow-500 shrink-0 mt-0.5" />
-                                            <p className="text-xs text-yellow-500/80">修改記憶可能會導致 AI 生成的故事前後不連貫，請謹慎操作。</p>
-                                        </div>
-                                        <button onClick={handleAddMemory} className={`w-full py-2 border border-dashed ${theme.border} rounded-lg opacity-60 text-sm hover:opacity-100 flex items-center justify-center gap-2`}>
-                                            <Plus size={16} /> 新增記憶節點
-                                        </button>
-                                    </>
-                                )}
-                                {memories.map(mem => (
-                                    <div key={mem.id} className={`p-4 rounded-xl border ${theme.border} ${theme.ui}`}>
-                                        <div className="flex justify-between items-start mb-2">
-                                            <span className="text-[10px] opacity-50">{new Date(mem.created_at).toLocaleDateString()}</span>
-                                            {user && user.id === novel.owner_id && (
-                                                <div className="flex gap-2">
-                                                    <button onClick={() => handleEditMemory(mem)} className="opacity-60 hover:text-blue-400"><Edit2 size={14} /></button>
-                                                    <button onClick={() => handleDeleteMemory(mem.id)} className="opacity-60 hover:text-red-400"><Trash2 size={14} /></button>
-                                                </div>
-                                            )}
-                                        </div>
-                                        <p className="text-sm opacity-80">{mem.content}</p>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-
+                        </div>
                     </div>
-                </div>
-            )}
+                )
+            }
 
             {/* Character Form Modal */}
-            {showCharForm && (
-                <div className="absolute inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-                    <div className={`w-full max-w-md ${theme.ui} ${theme.text} rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]`}>
-                        <div className={`p-4 border-b ${theme.border} flex justify-between items-center`}>
-                            <h3 className="font-bold">{editingChar ? '編輯角色' : '新增角色'}</h3>
-                            <button onClick={() => setShowCharForm(false)}><X size={20} /></button>
-                        </div>
-
-                        <div className="p-6 space-y-4 overflow-y-auto">
-                            <div>
-                                <label className="text-xs opacity-70 block mb-1">角色名稱</label>
-                                <input
-                                    value={charForm.name}
-                                    onChange={(e) => setCharForm({ ...charForm, name: e.target.value })}
-                                    className={`w-full bg-transparent border ${theme.border} rounded px-3 py-2 focus:outline-none focus:border-purple-500`}
-                                    placeholder="例如：林湘"
-                                />
+            {
+                showCharForm && (
+                    <div className="absolute inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+                        <div className={`w-full max-w-md ${theme.ui} ${theme.text} rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]`}>
+                            <div className={`p-4 border-b ${theme.border} flex justify-between items-center`}>
+                                <h3 className="font-bold">{editingChar ? '編輯角色' : '新增角色'}</h3>
+                                <button onClick={() => setShowCharForm(false)}><X size={20} /></button>
                             </div>
 
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="p-6 space-y-4 overflow-y-auto">
                                 <div>
-                                    <label className="text-xs opacity-70 block mb-1">定位</label>
-                                    <select
-                                        value={charForm.role}
-                                        onChange={(e) => setCharForm({ ...charForm, role: e.target.value })}
+                                    <label className="text-xs opacity-70 block mb-1">角色名稱</label>
+                                    <input
+                                        value={charForm.name}
+                                        onChange={(e) => setCharForm({ ...charForm, name: e.target.value })}
                                         className={`w-full bg-transparent border ${theme.border} rounded px-3 py-2 focus:outline-none focus:border-purple-500`}
-                                    >
-                                        <option value="主角">主角</option>
-                                        <option value="配角">配角</option>
-                                        <option value="反派">反派</option>
-                                        <option value="路人">路人</option>
-                                    </select>
+                                        placeholder="例如：林湘"
+                                    />
                                 </div>
+
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="text-xs opacity-70 block mb-1">定位</label>
+                                        <select
+                                            value={charForm.role}
+                                            onChange={(e) => setCharForm({ ...charForm, role: e.target.value })}
+                                            className={`w-full bg-transparent border ${theme.border} rounded px-3 py-2 focus:outline-none focus:border-purple-500`}
+                                        >
+                                            <option value="主角">主角</option>
+                                            <option value="配角">配角</option>
+                                            <option value="反派">反派</option>
+                                            <option value="路人">路人</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="text-xs opacity-70 block mb-1">性別</label>
+                                        <select
+                                            value={charForm.gender}
+                                            onChange={(e) => setCharForm({ ...charForm, gender: e.target.value })}
+                                            className={`w-full bg-transparent border ${theme.border} rounded px-3 py-2 focus:outline-none focus:border-purple-500`}
+                                        >
+                                            <option value="男">男</option>
+                                            <option value="女">女</option>
+                                            <option value="未知">未知</option>
+                                            <option value="無性別">無性別</option>
+                                        </select>
+                                    </div>
+                                </div>
+
                                 <div>
-                                    <label className="text-xs opacity-70 block mb-1">性別</label>
-                                    <select
-                                        value={charForm.gender}
-                                        onChange={(e) => setCharForm({ ...charForm, gender: e.target.value })}
-                                        className={`w-full bg-transparent border ${theme.border} rounded px-3 py-2 focus:outline-none focus:border-purple-500`}
-                                    >
-                                        <option value="男">男</option>
-                                        <option value="女">女</option>
-                                        <option value="未知">未知</option>
-                                        <option value="無性別">無性別</option>
-                                    </select>
+                                    <label className="text-xs opacity-70 block mb-1">外貌/性格描述</label>
+                                    <textarea
+                                        value={charForm.description}
+                                        onChange={(e) => setCharForm({ ...charForm, description: e.target.value })}
+                                        className={`w-full bg-transparent border ${theme.border} rounded px-3 py-2 h-32 focus:outline-none focus:border-purple-500 resize-none`}
+                                        placeholder="請輸入角色的外貌特徵、性格關鍵詞或背景故事..."
+                                    />
                                 </div>
-                            </div>
 
-                            <div>
-                                <label className="text-xs opacity-70 block mb-1">外貌/性格描述</label>
-                                <textarea
-                                    value={charForm.description}
-                                    onChange={(e) => setCharForm({ ...charForm, description: e.target.value })}
-                                    className={`w-full bg-transparent border ${theme.border} rounded px-3 py-2 h-32 focus:outline-none focus:border-purple-500 resize-none`}
-                                    placeholder="請輸入角色的外貌特徵、性格關鍵詞或背景故事..."
-                                />
-                            </div>
-
-                            {!editingChar && (
-                                <div className="bg-blue-500/10 border border-blue-500/20 p-3 rounded text-xs text-blue-400 flex gap-2">
-                                    <Info size={14} className="shrink-0 mt-0.5" />
-                                    <p>點擊儲存後，AI ({useDeepSeek ? 'DeepSeek' : 'Gemini'}) 將會自動補全該角色的詳細設定（冰山檔案）。</p>
-                                </div>
-                            )}
-
-                            {/* Profile Editing Section (Only when editing) */}
-                            {editingChar && (
-                                <div className="space-y-3 pt-4 border-t border-slate-700/50">
-                                    <h4 className="text-xs font-bold opacity-50 uppercase tracking-wider">詳細設定 (Profile)</h4>
-
-                                    <div>
-                                        <label className="text-xs opacity-70 block mb-1">外貌 (Appearance)</label>
-                                        <textarea
-                                            value={charForm.profile?.appearance || ''}
-                                            onChange={(e) => setCharForm({ ...charForm, profile: { ...charForm.profile, appearance: e.target.value } })}
-                                            className={`w-full bg-transparent border ${theme.border} rounded px-3 py-2 h-20 text-xs focus:outline-none focus:border-purple-500 resize-none`}
-                                            placeholder="詳細外貌描寫..."
-                                        />
+                                {!editingChar && (
+                                    <div className="bg-blue-500/10 border border-blue-500/20 p-3 rounded text-xs text-blue-400 flex gap-2">
+                                        <Info size={14} className="shrink-0 mt-0.5" />
+                                        <p>點擊儲存後，AI ({useDeepSeek ? 'DeepSeek' : 'Gemini'}) 將會自動補全該角色的詳細設定（冰山檔案）。</p>
                                     </div>
+                                )}
 
-                                    <div>
-                                        <label className="text-xs opacity-70 block mb-1">表層性格 (Personality Surface)</label>
-                                        <textarea
-                                            value={charForm.profile?.personality_surface || ''}
-                                            onChange={(e) => setCharForm({ ...charForm, profile: { ...charForm.profile, personality_surface: e.target.value } })}
-                                            className={`w-full bg-transparent border ${theme.border} rounded px-3 py-2 h-20 text-xs focus:outline-none focus:border-purple-500 resize-none`}
-                                            placeholder="平時展現出的性格..."
-                                        />
-                                    </div>
+                                {/* Profile Editing Section (Only when editing) */}
+                                {editingChar && (
+                                    <div className="space-y-3 pt-4 border-t border-slate-700/50">
+                                        <h4 className="text-xs font-bold opacity-50 uppercase tracking-wider">詳細設定 (Profile)</h4>
 
-                                    <div>
-                                        <label className="text-xs opacity-70 block mb-1">核心性格 (Personality Core)</label>
-                                        <textarea
-                                            value={charForm.profile?.personality_core || ''}
-                                            onChange={(e) => setCharForm({ ...charForm, profile: { ...charForm.profile, personality_core: e.target.value } })}
-                                            className={`w-full bg-transparent border ${theme.border} rounded px-3 py-2 h-20 text-xs focus:outline-none focus:border-purple-500 resize-none`}
-                                            placeholder="內在真實性格與動機..."
-                                        />
-                                    </div>
-
-                                    <div>
-                                        <label className="text-xs opacity-70 block mb-1">背景故事 (Biography)</label>
-                                        <textarea
-                                            value={charForm.profile?.biography || ''}
-                                            onChange={(e) => setCharForm({ ...charForm, profile: { ...charForm.profile, biography: e.target.value } })}
-                                            className={`w-full bg-transparent border ${theme.border} rounded px-3 py-2 h-24 text-xs focus:outline-none focus:border-purple-500 resize-none`}
-                                            placeholder="角色的過去經歷..."
-                                        />
-                                    </div>
-
-                                    <div className="grid grid-cols-2 gap-4">
                                         <div>
-                                            <label className="text-xs opacity-70 block mb-1 text-purple-400">說話風格 (Speaking Style)</label>
-                                            <input
-                                                value={charForm.profile?.speaking_style || ''}
-                                                onChange={(e) => setCharForm({ ...charForm, profile: { ...charForm.profile, speaking_style: e.target.value } })}
-                                                className={`w-full bg-transparent border ${theme.border} rounded px-3 py-2 text-xs focus:outline-none focus:border-purple-500`}
-                                                placeholder="文縐縐、粗俗..."
+                                            <label className="text-xs opacity-70 block mb-1">外貌 (Appearance)</label>
+                                            <textarea
+                                                value={charForm.profile?.appearance || ''}
+                                                onChange={(e) => setCharForm({ ...charForm, profile: { ...charForm.profile, appearance: e.target.value } })}
+                                                className={`w-full bg-transparent border ${theme.border} rounded px-3 py-2 h-20 text-xs focus:outline-none focus:border-purple-500 resize-none`}
+                                                placeholder="詳細外貌描寫..."
                                             />
                                         </div>
+
                                         <div>
-                                            <label className="text-xs opacity-70 block mb-1 text-purple-400">代表台詞 (Sample Dialogue)</label>
-                                            <input
-                                                value={charForm.profile?.sample_dialogue || ''}
-                                                onChange={(e) => setCharForm({ ...charForm, profile: { ...charForm.profile, sample_dialogue: e.target.value } })}
-                                                className={`w-full bg-transparent border ${theme.border} rounded px-3 py-2 text-xs focus:outline-none focus:border-purple-500`}
-                                                placeholder="一句話代表他..."
+                                            <label className="text-xs opacity-70 block mb-1">表層性格 (Personality Surface)</label>
+                                            <textarea
+                                                value={charForm.profile?.personality_surface || ''}
+                                                onChange={(e) => setCharForm({ ...charForm, profile: { ...charForm.profile, personality_surface: e.target.value } })}
+                                                className={`w-full bg-transparent border ${theme.border} rounded px-3 py-2 h-20 text-xs focus:outline-none focus:border-purple-500 resize-none`}
+                                                placeholder="平時展現出的性格..."
                                             />
                                         </div>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
 
-                        <div className={`p-4 border-t ${theme.border} flex justify-end gap-2`}>
-                            <button onClick={() => setShowCharForm(false)} className="px-4 py-2 opacity-60 hover:opacity-100">取消</button>
-                            <button
-                                onClick={handleSaveCharacter}
-                                disabled={isProcessingChar}
-                                className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 flex items-center gap-2"
-                            >
-                                {isProcessingChar ? 'AI 處理中...' : '儲存'}
-                            </button>
+                                        <div>
+                                            <label className="text-xs opacity-70 block mb-1">核心性格 (Personality Core)</label>
+                                            <textarea
+                                                value={charForm.profile?.personality_core || ''}
+                                                onChange={(e) => setCharForm({ ...charForm, profile: { ...charForm.profile, personality_core: e.target.value } })}
+                                                className={`w-full bg-transparent border ${theme.border} rounded px-3 py-2 h-20 text-xs focus:outline-none focus:border-purple-500 resize-none`}
+                                                placeholder="內在真實性格與動機..."
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="text-xs opacity-70 block mb-1">背景故事 (Biography)</label>
+                                            <textarea
+                                                value={charForm.profile?.biography || ''}
+                                                onChange={(e) => setCharForm({ ...charForm, profile: { ...charForm.profile, biography: e.target.value } })}
+                                                className={`w-full bg-transparent border ${theme.border} rounded px-3 py-2 h-24 text-xs focus:outline-none focus:border-purple-500 resize-none`}
+                                                placeholder="角色的過去經歷..."
+                                            />
+                                        </div>
+
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="text-xs opacity-70 block mb-1 text-purple-400">說話風格 (Speaking Style)</label>
+                                                <input
+                                                    value={charForm.profile?.speaking_style || ''}
+                                                    onChange={(e) => setCharForm({ ...charForm, profile: { ...charForm.profile, speaking_style: e.target.value } })}
+                                                    className={`w-full bg-transparent border ${theme.border} rounded px-3 py-2 text-xs focus:outline-none focus:border-purple-500`}
+                                                    placeholder="文縐縐、粗俗..."
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="text-xs opacity-70 block mb-1 text-purple-400">代表台詞 (Sample Dialogue)</label>
+                                                <input
+                                                    value={charForm.profile?.sample_dialogue || ''}
+                                                    onChange={(e) => setCharForm({ ...charForm, profile: { ...charForm.profile, sample_dialogue: e.target.value } })}
+                                                    className={`w-full bg-transparent border ${theme.border} rounded px-3 py-2 text-xs focus:outline-none focus:border-purple-500`}
+                                                    placeholder="一句話代表他..."
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className={`p-4 border-t ${theme.border} flex justify-end gap-2`}>
+                                <button onClick={() => setShowCharForm(false)} className="px-4 py-2 opacity-60 hover:opacity-100">取消</button>
+                                <button
+                                    onClick={handleSaveCharacter}
+                                    disabled={isProcessingChar}
+                                    className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 flex items-center gap-2"
+                                >
+                                    {isProcessingChar ? 'AI 處理中...' : '儲存'}
+                                </button>
+                            </div>
                         </div>
                     </div>
-                </div>
-            )
+                )
             }
         </div >
     );
