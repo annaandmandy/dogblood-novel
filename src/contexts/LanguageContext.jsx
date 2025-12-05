@@ -42,26 +42,15 @@ export const LanguageProvider = ({ children }) => {
     }, [language]);
 
     const t = (key) => {
-        const keys = key.split('.');
-        let value = translations[language];
+        // Direct lookup for flat keys
+        const value = translations[language]?.[key];
+        if (value) return value;
 
-        for (const k of keys) {
-            if (value && value[k]) {
-                value = value[k];
-            } else {
-                // Fallback to zh-TW if key missing in current language
-                let fallback = translations['zh-TW'];
-                for (const fk of keys) {
-                    if (fallback && fallback[fk]) {
-                        fallback = fallback[fk];
-                    } else {
-                        return key; // Return key if not found anywhere
-                    }
-                }
-                return fallback;
-            }
-        }
-        return value;
+        // Fallback to zh-TW
+        const fallback = translations['zh-TW']?.[key];
+        if (fallback) return fallback;
+
+        return key; // Return key if not found
     };
 
     const changeLanguage = async (lang) => {
