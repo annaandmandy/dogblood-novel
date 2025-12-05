@@ -1,9 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { useParams, Link } from 'react-router-dom';
 import { ChevronLeft, Info, Settings, Share, BookOpen, X, Trash2, Plus, Edit2, AlertTriangle, Type, Palette, List, ToggleLeft, ToggleRight, Save, User, Play, Pause, Volume2, Timer, Globe } from 'lucide-react';
-import { supabase } from '../lib/supabase';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { generateNextChapter, refineCharacterProfile, translateContent } from '../lib/gemini';
