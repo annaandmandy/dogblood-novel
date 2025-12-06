@@ -10,10 +10,12 @@ import { generateRandomSettings, generateNovelStart, ensureDetailedSettings } fr
 import { supabase } from '../lib/supabase';
 
 import { useAuth } from '../contexts/AuthContext';
+import { useLanguage } from '../contexts/LanguageContext';
 
 export default function Create() {
     const navigate = useNavigate();
     const { user } = useAuth();
+    const { t } = useLanguage();
 
     React.useEffect(() => {
         if (!user) {
@@ -56,14 +58,14 @@ export default function Create() {
 
     // --- Options Configuration ---
     const GENRE_OPTIONS = [
-        { id: '無限流', icon: Infinity, label: '無限流', desc: '生存遊戲、副本解密' },
-        { id: '諜戰黑道', icon: VenetianMask, label: '諜戰黑道', desc: '臥底、雙重身分、懸疑' },
-        { id: '修仙玄幻', icon: CloudLightning, label: '修仙玄幻', desc: '升級、歷練、東方幻想' },
-        { id: '末世生存', icon: Skull, label: '末世生存', desc: '喪屍、天災、人性考驗' },
-        { id: '豪門宮鬥', icon: Crown, label: '豪門宮鬥', desc: '復仇、權謀、打臉' },
-        { id: '都市情緣', icon: Heart, label: '都市情緣', desc: '甜寵、虐戀、現代日常' },
-        { id: '西方奇幻', icon: Sword, label: '西方奇幻', desc: '劍與魔法、冒險、龍' },
-        { id: '星際科幻', icon: Rocket, label: '星際科幻', desc: '機甲、太空歌劇、未來' },
+        { id: '無限流', icon: Infinity, label: t('genre.infinite'), desc: t('genre.infinite_desc') },
+        { id: '諜戰黑道', icon: VenetianMask, label: t('genre.spy'), desc: t('genre.spy_desc') },
+        { id: '修仙玄幻', icon: CloudLightning, label: t('genre.xianxia'), desc: t('genre.xianxia_desc') },
+        { id: '末世生存', icon: Skull, label: t('genre.apocalypse'), desc: t('genre.apocalypse_desc') },
+        { id: '豪門宮鬥', icon: Crown, label: t('genre.palace'), desc: t('genre.palace_desc') },
+        { id: '都市情緣', icon: Heart, label: t('genre.urban'), desc: t('genre.urban_desc') },
+        { id: '西方奇幻', icon: Sword, label: t('genre.fantasy'), desc: t('genre.fantasy_desc') },
+        { id: '星際科幻', icon: Rocket, label: t('genre.scifi'), desc: t('genre.scifi_desc') },
     ];
 
     const getRecommendedTotalChapters = (genreId) => {
@@ -76,19 +78,19 @@ export default function Create() {
         }
     };
     const POV_OPTIONS = [
-        { id: '第三人稱', label: '第三人稱 (上帝視角)', desc: '宏觀敘事、群像描寫', category: 'ALL' },
-        { id: '女主', label: '女主 (BG/大女主)', desc: '細膩情感、成長視角', category: 'BG' },
-        { id: '男主', label: '男主 (BG/男頻)', desc: '征服欲、大局觀', category: 'BG' },
-        { id: '主受', label: '主受 (BL/GL)', desc: '心理掙扎、韌性', category: 'BL_GL' },
-        { id: '主攻', label: '主攻 (BL/GL)', desc: '掌控欲、強勢', category: 'BL_GL' },
+        { id: '第三人稱', label: t('pov.third'), desc: t('pov.third_desc'), category: 'ALL' },
+        { id: '女主', label: t('pov.female'), desc: t('pov.female_desc'), category: 'BG' },
+        { id: '男主', label: t('pov.male'), desc: t('pov.male_desc'), category: 'BG' },
+        { id: '主受', label: t('pov.shou'), desc: t('pov.shou_desc'), category: 'BL_GL' },
+        { id: '主攻', label: t('pov.gong'), desc: t('pov.gong_desc'), category: 'BL_GL' },
     ];
 
     const TONE_OPTIONS = [
-        { id: '爽文', icon: Zap, label: '爽文', desc: '節奏快、不憋屈' },
-        { id: '歡脫', icon: Smile, label: '歡脫', desc: '搞笑、沙雕、吐槽' },
-        { id: '嚴肅', icon: Scale, label: '嚴肅', desc: '正劇、權謀、寫實' },
-        { id: '虐戀', icon: Moon, label: '虐戀', desc: '壓抑、絕望、人性' },
-        { id: '溫馨', icon: Coffee, label: '溫馨', desc: '治癒、日常、慢熱' },
+        { id: '爽文', icon: Zap, label: t('tone.cool'), desc: t('tone.cool_desc') },
+        { id: '歡脫', icon: Smile, label: t('tone.funny'), desc: t('tone.funny_desc') },
+        { id: '嚴肅', icon: Scale, label: t('tone.serious'), desc: t('tone.serious_desc') },
+        { id: '虐戀', icon: Moon, label: t('tone.angst'), desc: t('tone.angst_desc') },
+        { id: '溫馨', icon: Coffee, label: t('tone.warm'), desc: t('tone.warm_desc') },
     ];
 
     const AVAILABLE_TAGS = [
@@ -110,7 +112,7 @@ export default function Create() {
             setSelectedTags(prev => prev.filter(t => t !== tag));
         } else {
             if (selectedTags.length >= 5) {
-                alert("最多選擇 5 個標籤");
+                alert(t('create.max_tags_alert'));
                 return;
             }
             setSelectedTags(prev => [...prev, tag]);
@@ -120,7 +122,7 @@ export default function Create() {
     const addCustomTag = () => {
         if (!customTag.trim()) return;
         if (selectedTags.length >= 5) {
-            alert("最多選擇 5 個標籤");
+            alert(t('create.max_tags_alert'));
             return;
         }
         if (!selectedTags.includes(customTag.trim())) {
@@ -171,7 +173,7 @@ export default function Create() {
 
         } catch (error) {
             console.error(error);
-            alert('隨機生成失敗，請重試。');
+            alert(t('create.random_fail'));
         } finally {
             setLoadingRandom(false);
         }
@@ -188,7 +190,7 @@ export default function Create() {
 
     const handleCreate = async () => {
         if (!settings.title || !settings.protagonist || !settings.loveInterest || !settings.trope || !settings.summary) {
-            alert('所有欄位不得為空！請填寫完整設定。');
+            alert(t('create.empty_fields_alert'));
             return;
         }
 
@@ -401,7 +403,7 @@ export default function Create() {
             navigate(`/read/${novel.id}`);
 
         } catch (error) {
-            alert('生成或儲存失敗，請檢查 Supabase 連接或 API Key。');
+            alert(t('create.create_fail'));
             console.error(error);
         } finally {
             setLoading(false);
@@ -411,7 +413,7 @@ export default function Create() {
     return (
         <div className="p-6 max-w-4xl mx-auto min-h-full flex flex-col">
             <h1 className="text-3xl font-bold mb-8 text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-600">
-                創作新小說
+                {t('create.title')}
             </h1>
 
             <div className="space-y-10 flex-1">
@@ -420,7 +422,7 @@ export default function Create() {
                 <section>
                     <h2 className="text-xl font-medium text-slate-200 mb-4 flex items-center gap-2">
                         <span className="bg-rose-600 text-xs px-2 py-1 rounded text-white">Step 1</span>
-                        選擇性向 (Category)
+                        {t('create.step1')}
                     </h2>
                     <div className="flex gap-4">
                         <button
@@ -431,7 +433,7 @@ export default function Create() {
                                 }`}
                         >
                             <div className="text-2xl mb-1">🌹</div>
-                            <div className="font-bold">BG (言情)</div>
+                            <div className="font-bold">{t('create.bg')}</div>
                         </button>
                         <button
                             onClick={() => setCategory('BL')}
@@ -441,7 +443,7 @@ export default function Create() {
                                 }`}
                         >
                             <div className="text-2xl mb-1">🔮</div>
-                            <div className="font-bold">BL (耽美)</div>
+                            <div className="font-bold">{t('create.bl')}</div>
                         </button>
                         <button
                             onClick={() => setCategory('GL')}
@@ -451,7 +453,7 @@ export default function Create() {
                                 }`}
                         >
                             <div className="text-2xl mb-1">⚜️</div>
-                            <div className="font-bold">GL (百合)</div>
+                            <div className="font-bold">{t('create.gl')}</div>
                         </button>
                     </div>
                 </section>
@@ -460,7 +462,7 @@ export default function Create() {
                 <section>
                     <h2 className="text-xl font-medium text-slate-200 mb-4 flex items-center gap-2">
                         <span className="bg-purple-600 text-xs px-2 py-1 rounded text-white">Step 2</span>
-                        選擇題材 (Genre)
+                        {t('create.step2')}
                     </h2>
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                         {GENRE_OPTIONS.map((opt) => (
@@ -494,7 +496,7 @@ export default function Create() {
                     <section>
                         <h2 className="text-xl font-medium text-slate-200 mb-4 flex items-center gap-2">
                             <span className="bg-blue-600 text-xs px-2 py-1 rounded text-white">Step 3</span>
-                            視角 (POV)
+                            {t('create.step3_pov')}
                         </h2>
                         <div className="space-y-3">
                             {POV_OPTIONS.filter(opt =>
@@ -527,7 +529,7 @@ export default function Create() {
                     <section>
                         <h2 className="text-xl font-medium text-slate-200 mb-4 flex items-center gap-2">
                             <span className="bg-pink-600 text-xs px-2 py-1 rounded text-white">Step 3</span>
-                            基調 (Tone)
+                            {t('create.step3_tone')}
                         </h2>
                         <div className="grid grid-cols-2 gap-3">
                             {TONE_OPTIONS.map((opt) => (
@@ -554,7 +556,7 @@ export default function Create() {
                 <section>
                     <h2 className="text-xl font-medium text-slate-200 mb-4 flex items-center gap-2">
                         <span className="bg-emerald-600 text-xs px-2 py-1 rounded text-white">Step 4</span>
-                        元素標籤 (Tags)
+                        {t('create.step4')}
                     </h2>
                     <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-4">
                         <div className="flex flex-wrap gap-2 mb-4">
@@ -577,7 +579,7 @@ export default function Create() {
                                 type="text"
                                 value={customTag}
                                 onChange={(e) => setCustomTag(e.target.value)}
-                                placeholder="自定義標籤..."
+                                placeholder={t('create.custom_tag_placeholder')}
                                 className="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500"
                                 onKeyDown={(e) => e.key === 'Enter' && addCustomTag()}
                             />
@@ -585,7 +587,7 @@ export default function Create() {
                                 onClick={addCustomTag}
                                 className="px-4 py-2 bg-slate-800 rounded-lg text-sm hover:bg-slate-700 text-slate-200"
                             >
-                                新增
+                                {t('create.add_tag')}
                             </button>
                         </div>
                     </div>
@@ -595,8 +597,8 @@ export default function Create() {
                 <section className="mt-8 p-4 rounded-lg border border-slate-800 bg-slate-900/50">
                     <div className="flex items-center justify-between">
                         <div>
-                            <h3 className="text-lg font-medium text-slate-200">AI 模型選擇</h3>
-                            <p className="text-sm text-slate-400">選擇用於生成初始設定與大綱的模型。</p>
+                            <h3 className="text-lg font-medium text-slate-200">{t('create.ai_model_select')}</h3>
+                            <p className="text-sm text-slate-400">{t('create.ai_model_desc')}</p>
                         </div>
                         <div className="flex items-center gap-3">
                             <span className={`text-sm ${!useDeepSeek ? 'text-blue-400 font-bold' : 'text-slate-500'}`}>Gemini</span>
@@ -618,7 +620,7 @@ export default function Create() {
                     <div className="flex justify-between items-center">
                         <h2 className="text-xl font-medium text-slate-200 flex items-center gap-2">
                             <span className="bg-orange-600 text-xs px-2 py-1 rounded text-white">Step 5</span>
-                            核心設定
+                            {t('create.step5')}
                         </h2>
                         <button
                             onClick={handleRandomize}
@@ -626,7 +628,7 @@ export default function Create() {
                             className="text-sm flex items-center gap-2 text-purple-400 hover:text-purple-300 disabled:opacity-50 px-3 py-1.5 rounded-lg hover:bg-purple-500/10 transition-colors"
                         >
                             <Dice5 size={16} className={loadingRandom ? "animate-spin" : ""} />
-                            {loadingRandom ? "AI 生成中..." : "隨機生成設定"}
+                            {loadingRandom ? t('create.generating') : t('create.random_gen')}
                         </button>
                     </div>
 
@@ -636,7 +638,7 @@ export default function Create() {
                             value={settings.title}
                             onChange={handleInputChange}
                             type="text"
-                            placeholder="小說標題"
+                            placeholder={t('create.novel_title')}
                             className="w-full bg-slate-900 border border-slate-800 rounded-lg px-4 py-3 focus:outline-none focus:border-purple-500 transition-colors text-lg font-bold"
                         />
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -646,7 +648,7 @@ export default function Create() {
                                     value={settings.protagonist}
                                     onChange={handleInputChange}
                                     type="text"
-                                    placeholder="主角姓名"
+                                    placeholder={t('create.protagonist')}
                                     className="w-full bg-slate-900 border border-slate-800 rounded-lg px-4 py-3 pr-12 focus:outline-none focus:border-purple-500 transition-colors"
                                 />
                                 <button
@@ -663,7 +665,7 @@ export default function Create() {
                                     value={settings.loveInterest}
                                     onChange={handleInputChange}
                                     type="text"
-                                    placeholder="對象/反派姓名"
+                                    placeholder={t('create.love_interest')}
                                     className="w-full bg-slate-900 border border-slate-800 rounded-lg px-4 py-3 pr-12 focus:outline-none focus:border-purple-500 transition-colors"
                                 />
                                 <button
@@ -679,21 +681,21 @@ export default function Create() {
                             name="trope"
                             value={settings.trope}
                             onChange={handleInputChange}
-                            placeholder="核心梗 / 背景設定 (例如：重生回十年前，誓要奪回一切...)"
+                            placeholder={t('create.trope_placeholder')}
                             className="w-full bg-slate-900 border border-slate-800 rounded-lg px-4 py-3 h-24 resize-none focus:outline-none focus:border-purple-500 transition-colors"
                         />
                         <textarea
                             name="summary"
                             value={settings.summary}
                             onChange={handleInputChange}
-                            placeholder="劇情摘要 (至少 150 字，將顯示在圖書館)"
+                            placeholder={t('create.summary_placeholder')}
                             className="w-full bg-slate-900 border border-slate-800 rounded-lg px-4 py-3 h-32 resize-none focus:outline-none focus:border-purple-500 transition-colors text-sm"
                         />
 
                         <div className="flex items-center gap-4 bg-slate-900/50 p-4 rounded-lg border border-slate-800">
                             <div className="flex-1">
-                                <label className="block text-sm font-medium text-slate-300 mb-1">預計完結章節數</label>
-                                <div className="text-xs text-slate-500">AI 將根據此長度規劃三幕劇節奏 (預設 120)</div>
+                                <label className="block text-sm font-medium text-slate-300 mb-1">{t('create.chapter_count')}</label>
+                                <div className="text-xs text-slate-500">{t('create.chapter_count_desc')}</div>
                             </div>
                             <input
                                 type="number"
@@ -716,11 +718,11 @@ export default function Create() {
                 >
                     {loading ? (
                         <>
-                            <Sparkles className="animate-spin" /> 正在構建世界...
+                            <Sparkles className="animate-spin" /> {t('create.building_world')}
                         </>
                     ) : (
                         <>
-                            開始寫作 <ArrowRight size={24} />
+                            {t('create.start_writing')} <ArrowRight size={24} />
                         </>
                     )}
                 </button>

@@ -3,15 +3,25 @@ import { Link } from 'react-router-dom';
 import { Plus, Search, Filter } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { useLanguage } from '../contexts/LanguageContext';
 
 export default function Home() {
     const { user } = useAuth();
+    const { t } = useLanguage();
     const [novels, setNovels] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedGenre, setSelectedGenre] = useState('全部');
 
-    const GENRE_OPTIONS = ['全部', '無限流', '諜戰黑道', '修仙玄幻', '末世生存', '豪門宮鬥', '都市情緣'];
+    const GENRE_OPTIONS = [
+        { id: '全部', label: t('home.genre_all') },
+        { id: '無限流', label: t('genre.infinite') },
+        { id: '諜戰黑道', label: t('genre.spy') },
+        { id: '修仙玄幻', label: t('genre.xianxia') },
+        { id: '末世生存', label: t('genre.apocalypse') },
+        { id: '豪門宮鬥', label: t('genre.palace') },
+        { id: '都市情緣', label: t('genre.urban') },
+    ];
 
     const [error, setError] = useState(null);
 
@@ -63,15 +73,15 @@ export default function Home() {
     });
 
     if (loading) {
-        return <div className="p-6 text-center text-slate-500">載入中...</div>;
+        return <div className="p-6 text-center text-slate-500">{t('home.loading')}</div>;
     }
 
     if (error) {
         return (
             <div className="p-6 text-center space-y-4">
-                <div className="text-red-400">載入失敗: {error}</div>
+                <div className="text-red-400">{t('home.error')}: {error}</div>
                 <button onClick={fetchNovels} className="px-4 py-2 bg-slate-800 rounded-lg text-white hover:bg-slate-700">
-                    重試
+                    {t('home.retry')}
                 </button>
             </div>
         );
@@ -81,13 +91,13 @@ export default function Home() {
         return (
             <div className="flex flex-col items-center justify-center h-[80vh] p-6 space-y-6 text-center">
                 <h1 className="text-4xl font-bold bg-gradient-to-r from-purple-400 to-pink-600 bg-clip-text text-transparent">
-                    DogBlood
+                    {t('home.welcome_title')}
                 </h1>
                 <p className="text-slate-400 max-w-md">
-                    歡迎來到 DogBlood，您的 AI 輔助創作平台。登入以開始創作屬於您的狗血故事。
+                    {t('home.welcome_desc')}
                 </p>
                 <Link to="/auth" className="px-8 py-3 bg-purple-600 hover:bg-purple-500 text-white rounded-full font-bold transition-all shadow-lg shadow-purple-900/20">
-                    立即開始
+                    {t('home.start_now')}
                 </Link>
             </div>
         );
@@ -98,7 +108,7 @@ export default function Home() {
             <header className="flex flex-col gap-6 mb-8">
                 <div className="flex justify-between items-center">
                     <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
-                        我的書庫
+                        {t('home.title')}
                     </h1>
                     <Link to="/create" className="md:hidden p-2 bg-purple-600 rounded-full hover:bg-purple-500 transition-colors shadow-lg shadow-purple-900/20">
                         <Plus size={24} />
@@ -112,7 +122,7 @@ export default function Home() {
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
                         <input
                             type="text"
-                            placeholder="搜尋書名、主角或標籤..."
+                            placeholder={t('home.search_placeholder')}
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                             className="w-full bg-slate-900 border border-slate-800 rounded-xl py-3 pl-10 pr-4 text-sm focus:outline-none focus:border-purple-500 transition-colors"
@@ -123,14 +133,14 @@ export default function Home() {
                     <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
                         {GENRE_OPTIONS.map(genre => (
                             <button
-                                key={genre}
-                                onClick={() => setSelectedGenre(genre)}
-                                className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors border ${selectedGenre === genre
+                                key={genre.id}
+                                onClick={() => setSelectedGenre(genre.id)}
+                                className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors border ${selectedGenre === genre.id
                                     ? 'bg-purple-600 border-purple-600 text-white'
                                     : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700'
                                     }`}
                             >
-                                {genre}
+                                {genre.label}
                             </button>
                         ))}
                     </div>
@@ -167,7 +177,7 @@ export default function Home() {
                     <div className="w-12 h-12 rounded-full bg-slate-900 flex items-center justify-center mb-3 group-hover:bg-purple-900/30 transition-colors border border-slate-800 group-hover:border-purple-500/30">
                         <Plus className="text-slate-500 group-hover:text-purple-400" />
                     </div>
-                    <span className="text-sm text-slate-500 font-medium group-hover:text-purple-400 transition-colors">新建小說</span>
+                    <span className="text-sm text-slate-500 font-medium group-hover:text-purple-400 transition-colors">{t('home.new_novel')}</span>
                 </Link>
             </div>
         </div>
