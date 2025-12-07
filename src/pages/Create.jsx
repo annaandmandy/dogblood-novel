@@ -294,25 +294,32 @@ export default function Create() {
             const characterMap = new Map();
 
             // A. Initialize with base profiles (Protagonist & Love Interest)
-            characterMap.set(settings.protagonist, {
-                novel_id: novel.id,
-                name: settings.protagonist,
-                role: '主角',
-                gender: profiles.protagonist?.gender || '未知',
-                description: '本故事主角',
-                status: 'Alive',
-                profile: profiles.protagonist || {} // The deep profile from generateRandomSettings
-            });
+            const protagName = typeof settings.protagonist === 'object' ? settings.protagonist.name : settings.protagonist;
+            const loveName = typeof settings.loveInterest === 'object' ? settings.loveInterest.name : settings.loveInterest;
 
-            characterMap.set(settings.loveInterest, {
-                novel_id: novel.id,
-                name: settings.loveInterest,
-                role: '對象/反派',
-                gender: profiles.loveInterest?.gender || '未知',
-                description: '本故事重要角色',
-                status: 'Alive',
-                profile: profiles.loveInterest || {} // The deep profile from generateRandomSettings
-            });
+            if (protagName) {
+                characterMap.set(protagName, {
+                    novel_id: novel.id,
+                    name: protagName,
+                    role: '主角',
+                    gender: profiles.protagonist?.gender || (settings.protagonist?.gender) || '未知',
+                    description: '本故事主角',
+                    status: 'Alive',
+                    profile: profiles.protagonist || settings.protagonist?.profile || {}
+                });
+            }
+
+            if (loveName) {
+                characterMap.set(loveName, {
+                    novel_id: novel.id,
+                    name: loveName,
+                    role: '對象/反派',
+                    gender: profiles.loveInterest?.gender || (settings.loveInterest?.gender) || '未知',
+                    description: '本故事重要角色',
+                    status: 'Alive',
+                    profile: profiles.loveInterest || settings.loveInterest?.profile || {}
+                });
+            }
 
             // B. Add Side Characters from Design Blueprint
             if (designBlueprint?.side_characters && Array.isArray(designBlueprint.side_characters)) {
@@ -645,7 +652,7 @@ export default function Create() {
                             <div className="relative">
                                 <input
                                     name="protagonist"
-                                    value={settings.protagonist}
+                                    value={typeof settings.protagonist === 'object' ? settings.protagonist.name : settings.protagonist}
                                     onChange={handleInputChange}
                                     type="text"
                                     placeholder={t('create.protagonist')}
@@ -662,7 +669,7 @@ export default function Create() {
                             <div className="relative">
                                 <input
                                     name="loveInterest"
-                                    value={settings.loveInterest}
+                                    value={typeof settings.loveInterest === 'object' ? settings.loveInterest.name : settings.loveInterest}
                                     onChange={handleInputChange}
                                     type="text"
                                     placeholder={t('create.love_interest')}

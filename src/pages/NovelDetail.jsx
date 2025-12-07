@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, BookOpen, Trash2, Globe, Lock, User, Heart, List, Play } from 'lucide-react';
+import { ArrowLeft, BookOpen, Trash2, Globe, Lock, User, Heart, List, Play, Info, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -12,6 +12,7 @@ export default function NovelDetail() {
     const [chapters, setChapters] = useState([]);
     const [characters, setCharacters] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [selectedPlan, setSelectedPlan] = useState(null);
 
     const [readingProgress, setReadingProgress] = useState(null);
     const [isFavorite, setIsFavorite] = useState(false);
@@ -65,7 +66,7 @@ export default function NovelDetail() {
             // Fetch Chapters
             const { data: chaptersData, error: chaptersError } = await supabase
                 .from('chapters')
-                .select('id, chapter_index, title, created_at')
+                .select('id, chapter_index, title, created_at, plan')
                 .eq('novel_id', id)
                 .order('chapter_index', { ascending: true });
             if (chaptersError) throw chaptersError;
@@ -255,18 +256,34 @@ export default function NovelDetail() {
 
                     <div className="grid gap-2">
                         {chapters.map((chapter) => (
-                            <Link
+                            <div
                                 key={chapter.id}
-                                to={`/read/${novel.id}`} // Ideally this would link to specific chapter anchor, but Reader handles state. For now just go to Reader.
-                                className="p-4 rounded-lg bg-slate-900/50 border border-slate-800 hover:border-purple-500/50 hover:bg-slate-800 transition-all flex justify-between items-center group"
+                                className="p-4 rounded-lg bg-slate-900/50 border border-slate-800 hover:border-purple-500/50 hover:bg-slate-800 transition-all flex items-center gap-2 group"
                             >
-                                <span className="text-slate-300 font-medium group-hover:text-purple-300 transition-colors">
-                                    第 {chapter.chapter_index} 章：{chapter.title}
-                                </span>
-                                <span className="text-xs text-slate-600 group-hover:text-slate-500">
-                                    閱讀
-                                </span>
-                            </Link>
+                                <Link
+                                    to={`/read/${novel.id}`}
+                                    className="flex-1 flex justify-between items-center"
+                                >
+                                    <span className="text-slate-300 font-medium group-hover:text-purple-300 transition-colors">
+                                        第 {chapter.chapter_index} 章：{chapter.title}
+                                    </span>
+                                    <span className="text-xs text-slate-600 group-hover:text-slate-500 mr-4">
+                                        閱讀
+                                    </span>
+                                </Link>
+                                {chapter.plan && (
+                                    <button
+                                        onClick={(e) => {
+                                            e.preventDefault();
+                                            setSelectedPlan(chapter.plan);
+                                        }}
+                                        className="p-2 text-slate-500 hover:text-purple-400 hover:bg-slate-700 rounded-full transition-colors"
+                                        title="查看大綱"
+                                    >
+                                        <Info size={20} />
+                                    </button>
+                                )}
+                            </div>
                         ))}
                         {chapters.length === 0 && (
                             <div className="text-center py-10 text-slate-500">
@@ -276,6 +293,78 @@ export default function NovelDetail() {
                     </div>
                 </div>
             </div>
+
+            {/* Plan Details Modal */}
+            {
+                selectedPlan && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={() => setSelectedPlan(null)}>
+                        <div className="bg-slate-900 border border-slate-700 rounded-xl w-full max-w-2xl max-h-[80vh] overflow-y-auto p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
+                            <div className="flex justify-between items-start mb-6">
+                                <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                                    <Info size={24} className="text-purple-400" />
+                                    章節策劃案
+                                </h3>
+                                <button onClick={() => setSelectedPlan(null)} className="text-slate-400 hover:text-white">
+                                    <X size={24} />
+                                </button>
+                            </div>
+
+                            <div className="space-y-6 text-slate-300">
+                                {selectedPlan.chapter_title && (
+                                    <div>
+                                        <h4 className="text-sm font-bold text-slate-500 mb-1 uppercase tracking-wider">標題</h4>
+                                        <p className="text-lg font-medium text-white">{selectedPlan.chapter_title}</p>
+                                    </div>
+                                )}
+
+                                {selectedPlan.outline && (
+                                    <div>
+                                        <h4 className="text-sm font-bold text-slate-500 mb-1 uppercase tracking-wider">大綱</h4>
+                                        <p className="whitespace-pre-wrap leading-relaxed">{selectedPlan.outline}</p>
+                                    </div>
+                                )}
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    {selectedPlan.key_clue_action && (
+                                        <div className="bg-slate-800/50 p-4 rounded-lg">
+                                            <h4 className="text-xs font-bold text-blue-400 mb-2 uppercase">線索操作</h4>
+                                            <p className="text-sm">{selectedPlan.key_clue_action}</p>
+                                        </div>
+                                    )}
+                                    {selectedPlan.romance_moment && (
+                                        <div className="bg-slate-800/50 p-4 rounded-lg">
+                                            <h4 className="text-xs font-bold text-pink-400 mb-2 uppercase">感情高光</h4>
+                                            <p className="text-sm">{selectedPlan.romance_moment}</p>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {selectedPlan.plot_state_update && (
+                                    <div className="border-t border-slate-800 pt-4 mt-4">
+                                        <h4 className="text-sm font-bold text-slate-500 mb-2 uppercase tracking-wider">副本狀態</h4>
+                                        <div className="grid grid-cols-2 gap-4 text-sm">
+                                            <div>
+                                                <span className="text-slate-500">階段：</span>
+                                                <span className="text-white ml-2">{selectedPlan.plot_state_update.phase}</span>
+                                            </div>
+                                            <div>
+                                                <span className="text-slate-500">進度：</span>
+                                                <span className="text-white ml-2">{selectedPlan.plot_state_update.instance_progress}%</span>
+                                            </div>
+                                            {selectedPlan.plot_state_update.current_dungeon && (
+                                                <div className="col-span-2">
+                                                    <span className="text-slate-500">當前副本：</span>
+                                                    <span className="text-purple-300 ml-2">{selectedPlan.plot_state_update.current_dungeon.dungeon_name}</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                )
+            }
 
             {/* Mobile Floating Action Button */}
             <div className="md:hidden fixed bottom-24 left-0 right-0 px-6 flex justify-center z-20">
@@ -287,6 +376,6 @@ export default function NovelDetail() {
                     {actionButtonText}
                 </Link>
             </div>
-        </div>
+        </div >
     );
 }

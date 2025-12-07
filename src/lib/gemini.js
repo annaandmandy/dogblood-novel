@@ -1,45 +1,30 @@
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
 
-export const getRecommendedTotalChapters = (genre) => {
-    switch (genre) {
-        case "無限流": case "修仙玄幻": case "西方奇幻": case "星際科幻": return 200;
-        case "末世生存": return 160;
-        default: return 120;
-    }
-};
 
-const callApi = async (endpoint, body) => {
-    try {
-        const response = await fetch(`${API_URL}/api/${endpoint}`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(body)
-        });
+import {
+    getGeminiModel,
+    callDeepSeek,
+    cleanJson,
+    ANTI_CLICHE_INSTRUCTIONS,
+    getToneInstruction,
+    getPovInstruction,
+    polishContent,
+    translateToChinese,
+    callOpenRouterPipeline,
+    callApi
+} from "./llm.js";
 
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.error || `API Error: ${response.status}`);
-        }
+// ==========================================
+// 核心 Agent 函數群
+// ==========================================
 
-        return await response.json();
-    } catch (error) {
-        console.error(`API Call Failed (${endpoint}):`, error);
-        throw error;
-    }
-};
+
 
 export const generateRandomSettings = async (genre, tags = [], tone = "一般", targetChapterCount = null, category = "BG", useDeepSeek = false) => {
     return callApi('generate-settings', { genre, tags, tone, targetChapterCount, category, useDeepSeek });
 };
 
 export const ensureDetailedSettings = async (genre, simpleSettings, tags = [], tone = "一般", category = "BG", useDeepSeek = false) => {
-    return callApi('ensure-detailed-settings', { genre, simpleSettings, tags, tone, category, useDeepSeek });
-};
-
-export const refineCharacterProfile = async (charInfo, novelContext, useDeepSeek = false) => {
-    return callApi('refine-character', { charInfo, novelContext, useDeepSeek });
+    return callApi('ensure-detailed-settings', { genre, settings: simpleSettings, tags, tone, category, useDeepSeek });
 };
 
 export const generateNovelStart = async (genre, settings, tags = [], tone = "一般", pov = "女主", useDeepSeek = false) => {
@@ -50,6 +35,16 @@ export const generateNextChapter = async (novelContext, prevText, characters = [
     return callApi('generate-chapter', { novelContext, prevText, characters, memories, clues, tags, tone, pov, lastPlotState, useDeepSeek });
 };
 
+export const refineCharacterProfile = async (charInfo, novelContext, useDeepSeek = false) => {
+    // Simple implementation or placeholder
+    const model = getGeminiModel(true);
+    const prompt = `請完善角色設定：${charInfo.name}。小說：${novelContext.title}。回傳 JSON: { "profile": { ... } }`;
+    try {
+        const res = await model.generateContent(prompt);
+        return cleanJson(res.response.text())?.profile || {};
+    } catch (e) { return {}; }
+};
+
 export const translateContent = async (text, targetLang = 'English') => {
-    return callApi('translate', { text, targetLang });
+    return await translateToChinese(text); // Reusing existing helper for now
 };

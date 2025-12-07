@@ -3,8 +3,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { getGeminiModel, cleanJson, callDeepSeek, ANTI_CLICHE_INSTRUCTIONS } from './lib/llm.js';
-import { planInfinite } from './agents/infinite/planInfinite.js';
-import { writeInfiniteChapter } from './agents/infinite/writeInfiniteChapter.js';
+import { generateInfiniteNextChapter, generateInfiniteSettings, generateInfiniteStart, ensureInfiniteSettings } from './agents/infinite/planInfinite.js';
 
 dotenv.config();
 
@@ -385,7 +384,8 @@ export const generateNovelStart = async (genre, settings, tags = [], tone = "一
 
     try {
         const result = await model.generateContent(systemPrompt + "\n" + userPrompt);
-        const jsonResponse = cleanJson(result.response.text());
+        let jsonResponse = cleanJson(result.response.text());
+        if (!jsonResponse) jsonResponse = {};
 
         // Initialize plot state for first chapter
         jsonResponse.plot_state = {
@@ -516,64 +516,30 @@ export const generateNextChapter = async (novelContext, previousContent, charact
     let newPlotState = { ...lastPlotState };
 
     if (novelContext.genre === "無限流") {
-        console.log("🌀 Using Infinite Flow Planner...");
-        const infinitePlan = await planInfinite({
-            novelId: novelContext.id, // Pass novelId for DB storage
-            director,
-            blueprint: blueprintStr,
-            contextSummary: prevText,
+        console.log("🌀 Using Infinite Flow Orchestrator...");
+        return await generateInfiniteNextChapter(
+            novelContext,
+            previousContent,
+            characters,
             memories,
             clues,
-            characters,
             tags,
             tone,
-            lastPlotState
-        });
-
-        chapterPlan = infinitePlan;
-        // 更新狀態
-        if (infinitePlan.plot_state_update) {
-            newPlotState = { ...newPlotState, ...infinitePlan.plot_state_update };
-        }
-    } else {
-        // Standard Planner for other genres
-        console.log("🧠 Standard Planner working...");
-        chapterPlan = await planChapter(director, blueprintStr, prevText, memories, clues, novelContext.genre, tags, useDeepSeek, characters, director.instanceProgress);
-        // Standard updates (phase based on director)
-        newPlotState.phase = director.phase;
-        newPlotState.arcName = director.arcName;
-        newPlotState.instance_progress = director.instanceProgress + (chapterPlan?.suggested_progress_increment || 5);
-        newPlotState.cycle_num = director.cycleNum;
+            pov,
+            lastPlotState,
+            useDeepSeek
+        );
     }
 
-    // --- Writer Logic (Gemini) ---
-    // If Infinite Flow, use specialized writer
-    if (novelContext.genre === "無限流") {
-        try {
-            const writerResult = await writeInfiniteChapter({
-                novelContext,
-                plan: chapterPlan,
-                prevText,
-                tone,
-                pov
-            });
+    // Standard Planner for other genres
+    console.log("🧠 Standard Planner working...");
+    chapterPlan = await planChapter(director, blueprintStr, prevText, memories, clues, novelContext.genre, tags, useDeepSeek, characters, director.instanceProgress);
 
-            // 潤色 (Polish)
-            if (writerResult.content && writerResult.content.length > 500) {
-                const polishedContent = await polishContent(writerResult.content, tone, pov);
-                writerResult.content = polishedContent;
-            }
-
-            // Merge writer result with plot state
-            return {
-                ...writerResult,
-                plot_state: newPlotState
-            };
-        } catch (e) {
-            console.error("Infinite Writer Failed:", e);
-            // Fallback to standard writer logic below if specialized writer fails
-        }
-    }
+    // Standard updates (phase based on director)
+    newPlotState.phase = director.phase;
+    newPlotState.arcName = director.arcName;
+    newPlotState.instance_progress = director.instanceProgress + (chapterPlan?.suggested_progress_increment || 5);
+    newPlotState.cycle_num = director.cycleNum;
 
     // Standard Writer Logic (Fallback or Normal)
     const outlineContext = chapterPlan ?
@@ -623,7 +589,10 @@ export const generateNextChapter = async (novelContext, previousContent, charact
             jsonResponse.plot_state = newPlotState;
         }
 
-        return jsonResponse;
+        return {
+            ...jsonResponse,
+            chapter_plan: chapterPlan
+        };
 
     } catch (error) {
         if (isGeminiBlockedError(error)) {
@@ -633,7 +602,8 @@ export const generateNextChapter = async (novelContext, previousContent, charact
                 return {
                     content: content,
                     new_memories: [], character_updates: [],
-                    plot_state: newPlotState
+                    plot_state: newPlotState,
+                    chapter_plan: chapterPlan
                 };
             } catch (e) { throw new Error("系統忙碌"); }
         }
@@ -672,28 +642,25 @@ const ensureDetailedSettings = async (genre, settings, tags = [], tone = "一般
     ${styleGuide}
     ${coreInfo}
     
-    主角姓名：${settings.protagonist?.name || "未定"}
-    主角初步設定：${JSON.stringify(settings.protagonist?.profile || {})}
-    
-    對象姓名：${settings.loveInterest?.name || "未定"}
-    對象初步設定：${JSON.stringify(settings.loveInterest?.profile || {})}
+    主角姓名：${settings.protagonist?.name || settings.protagonist || "未定"}
+    對象姓名：${settings.loveInterest?.name || settings.loveInterest || "未定"}
 
     【補全任務】
     1. **深度人設**：根據現有資訊，補全外貌、性格（表/裡）、過去創傷、核心慾望。
     2. **說話風格 (Anti-OOC)**：設計獨特的說話方式與代表台詞。
     3. **世界觀與主線**：完善世界觀真相與結局走向。
 
-    請回傳 JSON:
+    請回傳 JSON (只回傳需要補全/更新的欄位):
     {
         "design_blueprint": { "main_goal": "...", "world_truth": "...", "ending_vision": "..." },
         "protagonist": { 
-            "name": "${settings.protagonist?.name || "主角名"}",
+            "name": "${settings.protagonist?.name || settings.protagonist || "主角名"}",
             "role": "主角",
             "gender": "...",
             "profile": { "appearance": "...", "personality_surface": "...", "personality_core": "...", "biography": "...", "speaking_style": "...", "sample_dialogue": "..." }
         },
         "loveInterest": { 
-            "name": "${settings.loveInterest?.name || "對象名"}",
+            "name": "${settings.loveInterest?.name || settings.loveInterest || "對象名"}",
             "role": "攻略對象",
             "gender": "...",
             "profile": { "appearance": "...", "personality_surface": "...", "personality_core": "...", "biography": "...", "speaking_style": "...", "sample_dialogue": "..." }
@@ -702,9 +669,39 @@ const ensureDetailedSettings = async (genre, settings, tags = [], tone = "一般
     `;
     try {
         const result = await model.generateContent(prompt);
-        return cleanJson(result.response.text());
+        const generated = cleanJson(result.response.text());
+
+        // Merge and Normalize
+        const finalSettings = { ...settings, ...(generated || {}) };
+
+        // Ensure protagonist is an object
+        if (!finalSettings.protagonist || typeof finalSettings.protagonist === 'string') {
+            finalSettings.protagonist = {
+                name: typeof finalSettings.protagonist === 'string' ? finalSettings.protagonist : "主角",
+                role: '主角',
+                profile: {}
+            };
+        }
+        // Ensure loveInterest is an object
+        if (!finalSettings.loveInterest || typeof finalSettings.loveInterest === 'string') {
+            finalSettings.loveInterest = {
+                name: typeof finalSettings.loveInterest === 'string' ? finalSettings.loveInterest : "對象",
+                role: '對象',
+                profile: {}
+            };
+        }
+        return finalSettings;
+
     } catch (e) {
-        return { design_blueprint: {}, protagonist: { profile: {} }, loveInterest: { profile: {} } };
+        console.error("ensureDetailedSettings failed:", e);
+        const fallback = { ...settings };
+        if (!fallback.protagonist || typeof fallback.protagonist === 'string') {
+            fallback.protagonist = { name: typeof fallback.protagonist === 'string' ? fallback.protagonist : "主角", role: '主角', profile: {} };
+        }
+        if (!fallback.loveInterest || typeof fallback.loveInterest === 'string') {
+            fallback.loveInterest = { name: typeof fallback.loveInterest === 'string' ? fallback.loveInterest : "對象", role: '對象', profile: {} };
+        }
+        return fallback;
     }
 };
 
@@ -725,7 +722,7 @@ const refineCharacterProfile = async (charData, novelContext, useDeepSeek = fals
     } catch (e) { return {}; }
 };
 
-import { generateInfiniteSettings, generateInfiniteStart, ensureInfiniteSettings } from './agents/infinite/planInfinite.js';
+
 
 // ... (existing code)
 

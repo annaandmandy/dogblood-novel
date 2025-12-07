@@ -126,3 +126,34 @@ export const getPovInstruction = (pov) => {
         default: return "【視角：上帝】全知視角，客觀描述場景與所有角色的行動。";
     }
 };
+
+export const polishContent = async (draft, tone, pov) => {
+    const model = getGeminiModel(false);
+    const editorPrompt = `你是一位資深的網文主編。請對以下初稿進行【深度潤色】。
+
+${ANTI_CLICHE_INSTRUCTIONS}
+
+【潤色目標】
+1. **去除AI味**：消除機械重複的句式，增加口語化與生動感。
+2. **去除冗餘**：刪除無意義的過渡句與重複的劇情回顧。
+3. **增強畫面感**：多用感官描寫（視覺、聽覺、觸覺）。
+4. **符合基調**：${tone}。
+5. **嚴格輸出格式**：**只輸出潤色後的小說正文**。絕對不要輸出「【深度潤色版】」、「以下是潤色後的內容」等任何前言後語。不要輸出標題。
+
+[初稿]
+${draft}`;
+
+    try {
+        const result = await model.generateContent(editorPrompt);
+        let polished = result.response.text();
+
+        // Post-processing to remove common AI prefixes
+        polished = polished.replace(/^【.*?】\s*/g, '')
+            .replace(/^\[.*?\]\s*/g, '')
+            .replace(/^以下是.*?\n/g, '')
+            .replace(/^Here is.*?\n/g, '')
+            .trim();
+
+        return polished;
+    } catch (e) { return draft; }
+};

@@ -383,7 +383,8 @@ export default function Reader() {
                     novel_id: novel.id,
                     chapter_index: safeNewIndex,
                     title: `第 ${safeNewIndex} 章`,
-                    content: aiResponse.content
+                    content: aiResponse.content,
+                    plan: aiResponse.chapter_plan
                 }).select().single()
                     .then(({ data }) => {
                         if (data) {
