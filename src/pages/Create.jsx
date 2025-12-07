@@ -94,10 +94,17 @@ export default function Create() {
     ];
 
     const AVAILABLE_TAGS = [
-        "重生", "穿越", "救贖", "系統", "穿書", "馬甲",
-        "強強", "主僕", "相愛相殺", "破鏡重圓", "追妻火葬場", "年下",
-        "副本解密", "生存遊戲", "升級", "歷練", "打臉", "復仇", "建設", "權謀",
-        "校園", "職場", "娛樂圈", "幫派", "臥底", "動作", "喪屍", "天災", "中式恐怖", "修仙", "規則怪談", "克蘇魯"
+        { id: 'tag.rebirth', label: '重生' }, { id: 'tag.transmigration', label: '穿越' }, { id: 'tag.redemption', label: '救贖' },
+        { id: 'tag.system', label: '系統' }, { id: 'tag.book_transmigration', label: '穿書' }, { id: 'tag.secret_identity', label: '馬甲' },
+        { id: 'tag.power_couple', label: '強強' }, { id: 'tag.master_servant', label: '主僕' }, { id: 'tag.enemies_to_lovers', label: '相愛相殺' },
+        { id: 'tag.reunion', label: '破鏡重圓' }, { id: 'tag.crematorium', label: '追妻火葬場' }, { id: 'tag.age_gap', label: '年下' },
+        { id: 'tag.dungeon', label: '副本解密' }, { id: 'tag.survival', label: '生存遊戲' }, { id: 'tag.level_up', label: '升級' },
+        { id: 'tag.adventure', label: '歷練' }, { id: 'tag.face_slapping', label: '打臉' }, { id: 'tag.revenge', label: '復仇' },
+        { id: 'tag.construction', label: '建設' }, { id: 'tag.politics', label: '權謀' },
+        { id: 'tag.campus', label: '校園' }, { id: 'tag.workplace', label: '職場' }, { id: 'tag.entertainment', label: '娛樂圈' },
+        { id: 'tag.gang', label: '幫派' }, { id: 'tag.undercover', label: '臥底' }, { id: 'tag.action', label: '動作' },
+        { id: 'tag.zombie', label: '喪屍' }, { id: 'tag.disaster', label: '天災' }, { id: 'tag.chinese_horror', label: '中式恐怖' },
+        { id: 'tag.cultivation', label: '修仙' }, { id: 'tag.rules_horror', label: '規則怪談' }, { id: 'tag.cthulhu', label: '克蘇魯' }
     ];
 
     // --- Handlers ---
@@ -567,18 +574,34 @@ export default function Create() {
                     </h2>
                     <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-4">
                         <div className="flex flex-wrap gap-2 mb-4">
-                            {[...AVAILABLE_TAGS, ...selectedTags.filter(t => !AVAILABLE_TAGS.includes(t))].map(tag => (
+                            {/* Render Predefined Tags */}
+                            {AVAILABLE_TAGS.map(tagObj => {
+                                const isSelected = selectedTags.includes(tagObj.label); // Still store the label string for now to match backend expectation
+                                return (
+                                    <button
+                                        key={tagObj.id}
+                                        onClick={() => toggleTag(tagObj.label)}
+                                        className={`px-3 py-1.5 rounded-full text-sm border transition-all ${isSelected
+                                            ? 'bg-emerald-600 border-emerald-600 text-white'
+                                            : 'bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-500'
+                                            }`}
+                                    >
+                                        {t(tagObj.id)}
+                                    </button>
+                                );
+                            })}
+
+                            {/* Render Custom Tags */}
+                            {selectedTags.filter(t => !AVAILABLE_TAGS.some(at => at.label === t)).map(tag => (
                                 <button
                                     key={tag}
                                     onClick={() => toggleTag(tag)}
-                                    className={`px-3 py-1.5 rounded-full text-sm border transition-all ${selectedTags.includes(tag)
-                                        ? 'bg-emerald-600 border-emerald-600 text-white'
-                                        : 'bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-500'
-                                        }`}
+                                    className="px-3 py-1.5 rounded-full text-sm border transition-all bg-emerald-600 border-emerald-600 text-white"
                                 >
                                     {tag}
                                 </button>
                             ))}
+
                         </div>
 
                         <div className="flex gap-2 pt-4 border-t border-slate-800">
