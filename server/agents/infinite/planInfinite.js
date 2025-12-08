@@ -141,16 +141,117 @@ const THEME_POOL = {
     ]
 };
 
+// ==========================================
+// 🌌 Infinite Flow Archetypes (無限流類型矩陣)
+// ==========================================
+const INFINITE_ARCHETYPES = {
+    // 1. 學校/考試型 (Global Exam Style)
+    school: {
+        trigger: ["校園", "考試", "學霸", "輕鬆"],
+        description: "以「荒誕學校」為主世界。玩家是學生，副本是考試，死亡是退學。風格通常帶有黑色幽默或規則怪談感。"
+    },
+    // 2. 直播/娛樂圈型 (Streamer/Showbiz)
+    stream: {
+        trigger: ["直播", "網紅", "娛樂圈", "彈幕", "爽文"],
+        description: "以「死亡直播間」或「驚悚綜藝」為主世界。玩家是主播/演員，積分是打賞/收視率。重點在於觀眾互動與人設扮演。"
+    },
+    // 3. 載具/旅行型 (Transport/Journey)
+    transport: {
+        trigger: ["列車", "公車", "郵輪", "旅行", "公路文"],
+        description: "以「幽靈載具」為主世界（如444號列車）。玩家是乘客，副本是站點。重點在於封閉空間的相處與旅途感。"
+    },
+    // 4. 遊戲/數據型 (VR/Game/Cyber)
+    game: {
+        trigger: ["網遊", "電競", "系統", "數據", "賽博", "升級"],
+        description: "以「虛擬主城」或「登錄空間」為主世界。玩家是數據化角色，有明確的面板、公會和排行榜。風格偏向RPG或數據流。"
+    },
+    // 5. 樓宇/封閉社區型 (Apartment/Tower)
+    building: {
+        trigger: ["公寓", "鄰居", "高塔", "層級", "求生"],
+        description: "以「神秘公寓」或「巴別塔」為主世界。玩家是住戶，副本是樓層或鄰居房間。重點在於鄰里關係與領地建設。"
+    },
+    // 6. 手機/APP型 (App/Modern)
+    app: {
+        trigger: ["手機", "APP", "都市", "靈異", "日常"],
+        description: "以「現實世界」為主世界，通過手機APP發布任務。副本融入現實生活（如午夜的辦公室）。重點是現實與恐怖的邊界模糊。"
+    },
+    // 7. 經典主神型 (Classic God Space)
+    classic: {
+        trigger: ["主神", "無限", "末世", "傳統"],
+        description: "經典的「白色空間」或「大光球」。強調殘酷的抹殺規則、強化兌換與團隊求生。"
+    },
+    building: {
+        trigger: ["公寓", "鄰居", "高塔", "求生", "籠屋", "房客", "租金", "樓"], // 👈 增加「籠屋」、「房客」
+        description: "以「神秘公寓」或「巴別籠屋」為主世界。玩家是住戶，副本是鄰居的房間。重點在於：狹窄空間的壓抑感、鄰里關係的猜忌、以及必須繳納的『租金』。"
+    }
+};
+
+// 根據 Tags 智能選擇類型
+const detectArchetype = (tags = []) => {
+    for (const [key, type] of Object.entries(INFINITE_ARCHETYPES)) {
+        if (type.trigger.some(t => tags.includes(t))) {
+            return type; // 命中匹配的類型
+        }
+    }
+    // 默認隨機選擇一個非學校的類型（增加多樣性），或者回傳 null 讓 AI 自由發揮
+    const types = Object.values(INFINITE_ARCHETYPES);
+    return types[Math.floor(Math.random() * types.length)];
+};
+
+const INFINITE_STYLE_GUIDE = `
+【無限流・寫作風格指南】
+1. **感官沉浸**：不要告訴讀者「很恐怖」，要描寫腐爛的氣味、粘膩的觸感、耳邊的低語。
+2. **冷幽默 (Cold Humor)**：主角面對恐怖時要保持一種「厭世的冷靜」或「瘋批的優雅」。
+3. **Show, Don't Tell**：不要寫「他很聰明」，寫他如何在必死的規則裡找到漏洞並加以利用。
+4. **主世界即戰場**：主世界（學校/公寓/直播間）不是安全區，而是另一個充滿壓抑規則的社會。
+5. **CP 張力**：拒絕工業糖精。要寫生死關頭的「共犯」感，眼神拉絲，肢體接觸要寫出電流感。
+`;
+
+// 動態顯化指令生成器 (統一第一章與後續章節的風格)
+const getDynamicSettingPrompt = (settings) => {
+    const combinedText = ((settings.summary || "") + JSON.stringify(settings.main_world_setting || "")).toLowerCase();
+
+    if (combinedText.includes("直播") || combinedText.includes("綜藝")) {
+        return `【寫作強制：直播流】
+        1. **鏡頭感**：時刻描寫主角對攝像頭的意識（表演、躲避）。
+        2. **彈幕**：在劇情關鍵點（反轉/受傷）插入視網膜上的彈幕反應。
+        3. **心態**：這是一場娛樂至死的表演。`;
+    }
+    if (combinedText.includes("公寓") || combinedText.includes("籠屋")) {
+        return `【寫作強制：公寓流】
+        1. **空間感**：強調狹窄、潮濕、隔音差的壓抑環境。
+        2. **鄰里**：描寫對鄰居的恐懼與窺視感。
+        3. **規則**：強調《入住須知》或《租約》的束縛。`;
+    }
+    if (combinedText.includes("學校") || combinedText.includes("考試")) {
+        return `【寫作強制：校園流】
+        1. **體制化**：強調廣播、鐘聲、校規的機械感。
+        2. **競爭**：描寫同學之間的敵意與分數壓力。`;
+    }
+    return "";
+};
+
 const selectDungeonTheme = (tags = [], cycleNum = 1, usedThemes = []) => {
     let availablePools = [];
-    if (tags.includes("中式恐怖") || tags.includes("古風") || tags.includes("盜墓")) availablePools.push(...THEME_POOL.chinese);
-    if (tags.includes("克蘇魯") || tags.includes("西幻") || tags.includes("吸血鬼")) availablePools.push(...THEME_POOL.western, ...THEME_POOL.cosmic);
-    if (tags.includes("星際") || tags.includes("賽博龐克") || tags.includes("科幻")) availablePools.push(...THEME_POOL.scifi, ...THEME_POOL.cosmic);
-    if (tags.includes("懸疑") || tags.includes("驚悚") || tags.includes("燒腦")) availablePools.push(...THEME_POOL.psychological);
 
-    availablePools.push(...THEME_POOL.modern, ...THEME_POOL.survival, ...THEME_POOL.hybrid, ...THEME_POOL.popculture);
+    // 優先根據 Tag 鎖定類型 (Strict Mode)
+    const isChinese = tags.includes("中式恐怖") || tags.includes("古風") || tags.includes("盜墓");
+    const isWestern = tags.includes("克蘇魯") || tags.includes("西幻") || tags.includes("吸血鬼");
+    const isSciFi = tags.includes("星際") || tags.includes("賽博龐克") || tags.includes("科幻");
 
-    if (cycleNum > 5) availablePools.push(...THEME_POOL.scifi, ...THEME_POOL.cosmic, ...THEME_POOL.psychological);
+    if (isChinese) availablePools.push(...THEME_POOL.chinese);
+    if (isWestern) availablePools.push(...THEME_POOL.western, ...THEME_POOL.cosmic);
+    if (isSciFi) availablePools.push(...THEME_POOL.scifi);
+
+    // 只有在沒有明確風格 Tag 時，才混合 Generic pool
+    if (!isChinese && !isWestern && !isSciFi) {
+        availablePools.push(...THEME_POOL.modern, ...THEME_POOL.survival, ...THEME_POOL.hybrid, ...THEME_POOL.popculture);
+        // 後期才會出現高维恐怖，且必須符合邏輯
+        if (cycleNum > 6) availablePools.push(...THEME_POOL.cosmic, ...THEME_POOL.psychological);
+    } else {
+        // 如果有明確風格，只混入少量的通用恐怖 (Modern/Survival)，保持風格統一
+        availablePools.push(...THEME_POOL.modern, ...THEME_POOL.survival);
+    }
 
     const freshThemes = availablePools.filter(theme => !usedThemes.includes(theme));
     const finalPool = freshThemes.length > 0 ? freshThemes : availablePools;
@@ -166,6 +267,9 @@ ${ANTI_CLICHE_INSTRUCTIONS}
 3. **現實的重量**：回到現實世界/主世界後，反差感要強烈。
 4. **極致張力**：主角與CP的關係應該充滿張力。
 5. **群像刻畫**：隊友不是報幕員。請賦予他們鮮明的性格。
+6. **規則破壞者**：讓主角鑽規則漏洞，用邏輯氣死監考官/系統，而不是單純靠武力。
+7. **主世界反差**：回到主世界後，反差感要強烈，才能突顯副本嗎得恐怖刺激。
+8. 讀者是來嗑cp的，請著重在cp的互動和情感描写。
 `;
 
 // 新增：主角認知限制指令 (防止主角一開始就知道所有設定)
@@ -177,100 +281,95 @@ const IGNORANCE_INSTRUCTION = `
 `;
 
 // ==========================================
-// 1. 專屬設定生成 (支援模型切換)
+// 1. 設定生成 (generateInfiniteSettings)
 // ==========================================
 export const generateInfiniteSettings = async (tags = [], tone = "一般", targetChapterCount = null, category = "BG", useDeepSeek = false) => {
     const toneDesc = getToneInstruction(tone);
     const totalChapters = targetChapterCount || 200;
-    const isRuleBased = tags.includes("規則怪談");
 
     let genderConstraint = "";
     if (category === "BG") genderConstraint = "主角必須是一男一女 (BG)。";
     else if (category === "BL") genderConstraint = "主角必須是兩位男性 (BL)。";
     else if (category === "GL") genderConstraint = "主角必須是兩位女性 (GL)。";
 
-    const dungeonRequirement = isRuleBased
-        ? "設計【規則怪談】副本。必須包含5-8條詭異的紅藍字規則，以及規則背後的邏輯陷阱。"
-        : "設計【生存/動作/解謎】副本。重點在於「主線任務」與「環境威脅」。";
-
     const prompt = `
-    你是一位頂級的無限流小說架構師。
-    請設計一套驚悚、懸疑但充滿 CP 張力的設定。
+    你是一位頂級無限流小說架構師。請設計一套獨特、有趣且設定嚴密的小說設定。
     **類別**：${category}。**篇幅**：${totalChapters} 章。
-    **性別要求**：${genderConstraint}
-    風格：${tags.join('、')}。\n${toneDesc}
-    
+    **標籤**：${tags.join('、')}。**基調**：${toneDesc}
+    ${genderConstraint}
     ${INFINITE_ANTI_CLICHE}
     
-    【任務要求】
-    1. **CP 設計 (關鍵)**：設計一對強強 CP（或極致拉扯）。他們在現實世界是否有過節？還是久別重逢？或者是系統的對立面？
-    2. **主角團 (The Squad)**：請設計 2-3 位**固定隊友**。他們將與主角一起闖關。請賦予他們討喜的性格標籤。
-    3. **主線謎題**：主角進入無限世界並非偶然。請設計一個貫穿全書的懸疑主線。
-    4. **第一副本設計**：${dungeonRequirement}
+    【核心任務】
+    1. **主世界 (Hub) 本身就是有自己的故事線與設定**：主世界不只是休息區，主世界有自己獨特的設定，如：現代/異次元/低魔/高魔。若主世界為現實也可以，
+    2. **貨幣與懲罰**：不要只用「積分」。如直播流用「打賞/壽命」、校園流用「學分」。懲罰不僅是抹殺。
+    3. **CP 關係**：強張力 CP（宿敵/共犯/救贖）。
     
     【回傳 JSON】
     {
       "title": "小說標題",
-      "summary": "吸睛文案 (需包含主世界/學校/空間的背景設定)",
+      "summary": "吸睛文案 (含主世界背景、進入原因、金手指)",
       "trope": "核心梗",
-      "design_blueprint": {
-          "main_goal": "主角終極目標",
-          "world_truth": "世界隱藏真相",
-          "ending_vision": "預設結局",
-          "side_characters": [ 
-              { "name": "...", "role": "隊友/搞笑擔當", "profile": "...", "speaking_style": "...", "sample_dialogue": "..." },
-              { "name": "...", "role": "隊友/智囊", "profile": "...", "speaking_style": "...", "sample_dialogue": "..." }
+      "main_world_setting": {
+          "name": "主世界名稱 (如：荒蕪學府 / 第13中學)",
+          "type": "類型 (校園/公寓/列車/直播等)",
+          "entry_method": "進入方式",
+          "currency": "貨幣",
+          "rules": ["校規1...", "校規2..."],
+          "hierarchy": "階級制度 (如：S班擁有生殺大權)",
+          "punishment": "懲罰",
+          "atmosphere": "氛圍 (如：表面正常但天空有巨眼)",
+          "key_locations": ["地點1", "地點2", "地點3"],
+          "conflict_sources": [
+              "衝突源1 (如：樓長每週收『肢體稅』)",
+              "衝突源2 (如：隔壁住著變態殺人魔)",
+              "衝突源3 (如：主角被執法隊監視)"
           ]
       },
-      "first_dungeon_setting": {
-          "dungeon_name": "副本名稱",
-          "difficulty": "等級",
-          "background_story": "副本背景",
-          "core_rules": ["規則1...", "規則2..."], 
-          "missions": ["主線任務...", "支線任務..."], 
-          "mechanics": { "gameplay": "核心玩法", "threat": "主要威脅" }
+      "design_blueprint": {
+          "main_goal": "終極目標",
+          "world_truth": "隱藏真相",
+          "ending_vision": "結局",
+          "side_characters": [ { "name": "...", "role": "...", "profile": "...", "speaking_style": "..." } ]
       },
-      "protagonist": { "name": "主角名", "role": "主角", "gender": "...", "profile": { "appearance": "...", "personality_surface": "...", "personality_core": "...", "biography": "...", "trauma": "...", "desire": "...", "speaking_style": "...", "sample_dialogue": "..." } },
-      "loveInterest": { "name": "對象名", "role": "...", "gender": "...", "profile": { "appearance": "...", "personality_surface": "...", "personality_core": "...", "biography": "...", "trauma": "...", "desire": "...", "speaking_style": "...", "sample_dialogue": "..." } }
+      "protagonist": { "name": "...", "role": "主角", "gender": "...", "profile": { "appearance": "...", "personality": "...", "special_ability": "...", "background": "...", "speaking_style": "..." } },
+      "loveInterest": { "name": "...", "role": "...", "gender": "...", "profile": { "appearance": "...", "personality": "...", "identity_in_world": "...", "speaking_style": "..." } },
+      "relationships": [
+          { "source": "Protagonist", "target": "LoveInterest", "type": "Stranger/Ex/Rival", "status": "Not Met", "description": "..." }
+      ]
     }
     `;
 
     try {
-        if (useDeepSeek) {
-            return await callDeepSeek("你是一位無限流架構師。", prompt, true);
-        } else {
-            const model = getGeminiModel(true);
-            const res = await model.generateContent(prompt);
-            return cleanJson(res.response.text());
-        }
-    } catch (e) {
-        console.warn("Settings generation failed, retrying with Gemini...", e);
+        if (useDeepSeek) return await callDeepSeek("你是一位無限流架構師。", prompt, true);
         const model = getGeminiModel(true);
         const res = await model.generateContent(prompt);
         return cleanJson(res.response.text());
+    } catch (e) {
+        return null;
     }
 };
 
 export const ensureInfiniteSettings = async (simpleSettings, tags = [], tone = "一般", category = "BG", useDeepSeek = false) => {
     const toneDesc = getToneInstruction(tone);
-    const isRuleBased = tags.includes("規則怪談");
 
-    if (simpleSettings.first_dungeon_setting && simpleSettings.first_dungeon_setting.dungeon_name) {
+    // 如果已經有詳細世界觀，則跳過
+    if (simpleSettings.design_blueprint && simpleSettings.protagonist?.profile) {
         return simpleSettings;
     }
 
     const prompt = `
     你是一位無限流小說架構師。
-    請根據現有的簡單設定，補全【第一個副本】的詳細設計，以及【世界觀藍圖】。
+    請根據現有的簡單設定，補全【世界觀藍圖】與【角色詳情】。
+    (注意：暫時不需要設計副本，請專注於主世界與人物)
+    
     標題：${simpleSettings.title}
     風格：${tags.join('、')}
     ${INFINITE_ANTI_CLICHE}
 
     【補全任務】
-    1. **副本設計**：${isRuleBased ? "設計一個規則怪談副本，包含5-8條紅藍字規則。" : "設計一個生存/解謎副本，包含主線任務與環境威脅。"}
-    2. **世界觀藍圖 (Design Blueprint)**：請設計主角的「終極目標」、無限世界的「隱藏真相」以及「預設結局」。
-    3. **角色深度設定**：請完善主角 (${simpleSettings.protagonist?.name || simpleSettings.protagonist}) 與對象 (${simpleSettings.loveInterest?.name || simpleSettings.loveInterest}) 的詳細人設（外貌、性格、說話風格）。
-    4. **配角設計**：補充 2 位關鍵隊友。
+    1. **世界觀藍圖 (Design Blueprint)**：請設計主角的「終極目標」、無限世界的「隱藏真相」以及「預設結局」。
+    2. **角色深度設定**：請完善主角 (${simpleSettings.protagonist?.name || simpleSettings.protagonist}) 與對象 (${simpleSettings.loveInterest?.name || simpleSettings.loveInterest}) 的詳細人設（外貌、性格、說話風格）。
+    3. **配角設計**：補充 2 位關鍵隊友。
 
     回傳 JSON (只回傳需要補全/更新的欄位):
     {
@@ -279,14 +378,6 @@ export const ensureInfiniteSettings = async (simpleSettings, tags = [], tone = "
             "world_truth": "...", 
             "ending_vision": "...",
             "side_characters": [ { "name": "...", "role": "...", "profile": "..." } ]
-        },
-        "first_dungeon_setting": { 
-            "dungeon_name": "...", 
-            "difficulty": "...", 
-            "background_story": "...", 
-            "core_rules": [], 
-            "missions": [], 
-            "mechanics": { "gameplay": "...", "threat": "..." } 
         },
         "protagonist": { 
             "name": "${simpleSettings.protagonist?.name || simpleSettings.protagonist}", 
@@ -297,7 +388,10 @@ export const ensureInfiniteSettings = async (simpleSettings, tags = [], tone = "
             "name": "${simpleSettings.loveInterest?.name || simpleSettings.loveInterest}", 
             "role": "對象", 
             "profile": { "appearance": "...", "personality_surface": "...", "personality_core": "...", "biography": "...", "speaking_style": "...", "sample_dialogue": "..." } 
-        }
+        },
+        "relationships": [
+            { "source": "${simpleSettings.protagonist?.name || '主角'}", "target": "${simpleSettings.loveInterest?.name || '對象'}", "type": "宿敵/前任/陌生人", "status": "Not Met", "description": "初始關係描述" }
+        ]
     }
     `;
 
@@ -378,146 +472,74 @@ export const ensureInfiniteSettings = async (simpleSettings, tags = [], tone = "
 };
 
 // ==========================================
-// 2. 專屬第一章生成 (開局分流：主世界 vs 副本)
+// ==========================================
+// 2. 第一章生成 (The Pilot Director)
 // ==========================================
 export const generateInfiniteStart = async (settings, tags = [], tone = "一般", pov = "女主", useDeepSeek = false) => {
     const toneDesc = getToneInstruction(tone);
     const povDesc = getPovInstruction(pov);
     const styleGuide = `風格：${tags.join('、')} | ${toneDesc} | ${povDesc}`;
-    const isRuleBased = tags.includes("規則怪談");
-    const firstDungeon = settings.first_dungeon_setting;
-    let sideCharsText = settings.design_blueprint?.side_characters ? settings.design_blueprint.side_characters.map(c => `- ${c.name} (${c.role}): ${c.profile}`).join('\n') : "";
 
-    // 🕵️ 判斷開局類型 (Hub Start vs Dungeon Start)
-    const summary = settings.summary || "";
-    // 關鍵字檢索：判斷文案中是否提及了「學校」、「入學」、「大廳」、「空間」等主世界概念
-    const isHubStart = summary.includes("學校") || summary.includes("入學") || summary.includes("主神空間") || summary.includes("列車") || summary.includes("大廳") || summary.includes("公會");
+    const dynamicPrompt = getDynamicSettingPrompt(settings);
 
-    let prompt;
-    // 預設狀態 (副本開局)
-    let startPhase = "setup";
-    let startArcName = firstDungeon?.dungeon_name || "未知副本";
-    let startDungeonData = firstDungeon;
-    let startRules = {
-        title: isRuleBased ? "規則書" : "任務面板",
-        rules: isRuleBased ? (firstDungeon?.core_rules || []) : (firstDungeon?.missions || []),
-        hidden_truth: "未知"
-    };
-    let startProgress = 5;
-    let startCycle = 1;
+    // 入局邏輯：防止斷片
+    const ENTRY_INSTRUCTION = `
+    【⚠️ 開篇關鍵：拒絕斷片 (Entry Continuity)】
+    請再次閱讀簡介：${settings.summary}
+    1. **入局**：必須從簡介中的「入局原因」（如車禍、簽約、目擊）切入，不要寫「一覺醒來失憶」。
+    2. **過渡**：描寫現實世界是如何扭曲成異世界的（如：走廊無限延伸、手機變成血紅色）。
+    3. **初探**：主角抵達主世界（非副本），感受到這個社會的惡意與規則。
+    `;
 
-    // --- 分支 A: 主世界/序章開局 (Cycle 0) ---
-    if (isHubStart) {
-        startPhase = "hub_intro"; // 特殊階段：主世界導入
-        startArcName = "序章：初入世界";
-        startDungeonData = null; // 還沒進副本
-        startRules = null;       // 還沒有規則
-        startProgress = 0;
-        startCycle = 0;          // Cycle 0 代表序章
+    const prompt = `
+    你是一位無限流小說家。請撰寫**第一章**。
+    ${styleGuide}
+    ${INFINITE_STYLE_GUIDE}
+    ${dynamicPrompt}
+    ${ENTRY_INSTRUCTION}
 
-        prompt = `
-        你是一位無限流小說家。請撰寫第一章。
-        **寫作風格**：${tone}。
-        ${INFINITE_ANTI_CLICHE}
-        ${IGNORANCE_INSTRUCTION}
+    【小說設定】
+    - 標題：${settings.title}
+    - 簡介：${settings.summary}
+    - 主世界：${JSON.stringify(settings.main_world_setting)}
+    - 主角：${JSON.stringify(settings.protagonist)}
+    - 對象：${JSON.stringify(settings.loveInterest)}
 
-        【小說設定】${settings.title}
-        【簡介】${summary}
-        ${styleGuide}
-        【主角】${JSON.stringify(settings.protagonist)}
-        【對象】${JSON.stringify(settings.loveInterest)}
-        【重要配角】${sideCharsText}
-        
-        【寫作任務：主世界導入】
-        1. **新人報到**：主角剛進入這個奇異的主世界（如：收到錄取通知書來到詭異學校、死後靈魂來到中轉站）。
-        2. **未知與迷茫**：描寫主角對環境的困惑，以及與周圍其他「新人」的互動（或許有資深者來引導/恐嚇）。
-        3. **接取任務**：章節後半段，主角被迫接到了第一個副本任務【${firstDungeon?.dungeon_name}】，準備傳送或出發。
-        4. **氛圍**：主世界雖然暫時安全，但要透露出一種詭異、壓抑或弱肉強食的規則感。
-        5. **字數**：2000字以上。
-        
-        【回傳 JSON】
-        {
-          "content": "小說正文...",
-          "character_updates": [ ... ],
-          "plot_state": {
-              "phase": "hub_intro", // 標記為序章
-              "arcName": "序章：初入世界",
-              "instance_progress": 5,
-              "cycle_num": 0,       // 0 代表還沒開始第一個正式副本
-              "current_dungeon": null,
-              "current_rules": null
-          }
-        }
-        `;
+    【寫作任務】
+    1. 寫出一個令人毛骨悚然的開頭。
+    2. 讓主角迅速意識到處境，並展現出不同於常人的反應（金手指/性格）。
+    3. **結尾懸念**：停在一個衝突即將爆發，或者發現驚人真相的瞬間。
+    4. 字數：2000+。
+
+    【回傳 JSON】
+    {
+      "content": "...",
+      "plot_state": {
+          "phase": "hub", 
+          "sub_phase": "intro",
+          "hub_tension": 20, // 第一章通常會積累一點張力
+          "cycle_num": 0,
+          "current_dungeon": null
+      },
+      "cliffhanger_note": "第一章結尾停在主角看到了牆上的血字規則，並且身後傳來了腳步聲。" 
     }
-    // --- 分支 B: 副本直接開局 (In Media Res) ---
-    else {
-        let mechanismDisplay = isRuleBased
-            ? `**規則展示**：發現詭異規則（紙條/血字）。主角敏銳地察覺規則漏洞。`
-            : `**任務發布**：腦海中/視網膜上浮現冰冷的任務文字。主角冷靜分析局勢。`;
-
-        prompt = `
-        你是一位無限流小說家。請撰寫第一章。
-        **寫作風格**：高智商、強強對抗、快節奏、氛圍驚悚但邏輯嚴密。
-        ${INFINITE_ANTI_CLICHE}
-        ${IGNORANCE_INSTRUCTION}
-
-        【小說設定】${settings.title}
-        ${styleGuide}
-        【當前副本：${firstDungeon?.dungeon_name}】
-        背景：${firstDungeon?.background_story}
-        規則/任務：${isRuleBased ? firstDungeon?.core_rules?.join('\n') : firstDungeon?.missions?.join('\n')}
-        【主角】${JSON.stringify(settings.protagonist)}
-        【對象】${JSON.stringify(settings.loveInterest)}
-        【重要配角】${sideCharsText}
-        
-        【寫作任務：直接入局】
-        1. **驚醒**：主角醒來時已經身處副本中。描寫群體的恐慌 vs 主角的冷靜。
-        2. ${mechanismDisplay}
-        3. **CP 張力**：安排與攻略對象的初次交鋒。
-        4. **字數**：2000字以上。
-        
-        【回傳 JSON】
-        {
-          "content": "小說正文...",
-          "character_updates": [ ... ],
-          "plot_state": {
-              "phase": "setup",
-              "arcName": "${firstDungeon?.dungeon_name}",
-              "instance_progress": 5,
-              "cycle_num": 1,
-              "current_dungeon": ${JSON.stringify(firstDungeon)},
-              "current_rules": { "title": "${isRuleBased ? '規則書' : '任務面板'}", "rules": [], "hidden_truth": "..." }
-          }
-        }
-        `;
-    }
+    `;
 
     try {
         let result;
-        if (useDeepSeek) result = await callDeepSeek("你是一位無限流小說家。", prompt, true);
+        if (useDeepSeek) result = await callDeepSeek("你是無限流小說家。", prompt, true);
         else {
             const model = getGeminiModel(true);
             const res = await model.generateContent(prompt);
             result = cleanJson(res.response.text());
         }
-        if (!result) result = {};
-        if (!result.plot_state) result.plot_state = {};
 
-        // Fallback safety
-        if (!result.plot_state.phase) result.plot_state.phase = startPhase;
-        if (!result.plot_state.arcName) result.plot_state.arcName = startArcName;
-        if (result.plot_state.cycle_num === undefined) result.plot_state.cycle_num = startCycle;
-
-        // FIX: Persist first dungeon for hub start so Chapter 2 can use it
-        if (isHubStart && firstDungeon) {
-            result.plot_state.preloaded_dungeon = firstDungeon;
+        // 確保第一章生成的副本設定（如果有的話）被保存
+        if (settings.first_dungeon_setting) {
+            result.plot_state.preloaded_dungeon = settings.first_dungeon_setting;
         }
-
         return result;
-    } catch (e) {
-        throw new Error("生成失敗，請重試");
-    }
+    } catch (e) { throw new Error("生成失敗"); }
 };
 
 export const generateDungeonDesign = async (arcName, tone, tags = [], cycleNum, extraInstruction = "", hazards = [], useDeepSeek = false) => {
@@ -560,86 +582,219 @@ export const generateDungeonDesign = async (arcName, tone, tags = [], cycleNum, 
     }
 };
 
-const directorInfinite = (currentChapterIndex, lastPlotState, totalChapters) => {
-    let progress = lastPlotState?.instance_progress || 0;
-    let cycleNum = lastPlotState?.cycle_num || 1;
-    let arcName = lastPlotState?.arcName || `第${cycleNum}卷`;
-    let phase = lastPlotState?.phase || "setup";
+// ==========================================
+// 🎬 Infinite Flow Director (無限流導演 - 事件驅動版)
+// ==========================================
+export const directorInfinite = (currentChapterIndex, lastPlotState, totalChapters) => {
+    // 1. 初始化狀態讀取
+    // 如果是第一章，預設為 "hub_intro"
+    let phase = lastPlotState?.phase || "hub_intro";
+    let subPhase = lastPlotState?.sub_phase || "normal";
+    let hubTension = lastPlotState?.hub_tension || 0; // 主世界張力值 (0-100)
+    let cycleNum = lastPlotState?.cycle_num || 0;     // 已度過的副本數
+    let instanceProgress = lastPlotState?.instance_progress || 0;
+    let arcName = lastPlotState?.arcName || "序章：初入世界";
 
-    // Handle hub_intro transition
-    if (phase === 'hub_intro') {
-        phase = "setup";
-        progress = 5;
-        cycleNum = 1;
-        // arcName will be updated by planner based on dungeon name
-    } else if (phase === 'resolution') {
-        phase = "hub_phase";
-        progress = 0;
-        arcName = "主世界/休整區";
-    } else if (phase === 'hub_phase') {
-        if (progress >= 40) {
-            phase = "setup";
-            progress = 5;
-            cycleNum += 1;
-            arcName = `第${cycleNum}個副本`;
-        } else {
-            phase = "hub_phase";
-        }
-    } else {
-        if (progress <= 15) phase = "setup";
-        else if (progress <= 75) phase = "investigation";
-        else if (progress < 100) phase = "climax";
-        else phase = "resolution";
-    }
-
-    const isFinale = (totalChapters - currentChapterIndex) <= 20;
+    // 判斷是否接近結局
+    const isFinale = (totalChapters - currentChapterIndex) <= 5;
     if (isFinale) {
-        phase = 'finale';
-        arcName = "終章：最終決戰";
+        return {
+            phase: 'finale',
+            sub_phase: 'final_battle',
+            intensity: 'high',
+            directive: "【終局模式】全書高潮。揭開無限世界的終極真相，主角挑戰系統/主神/校長，打破輪迴。",
+            arcName: "終章：世界崩塌",
+            hubTension: 100,
+            cycleNum,
+            instanceProgress
+        };
     }
 
+    // 變數準備
     let directive = "";
     let intensity = "medium";
+    let nextPhase = phase;
+    let nextSubPhase = subPhase;
+    let nextHubTension = hubTension;
+    let nextCycleNum = cycleNum;
+    let nextInstanceProgress = instanceProgress;
 
-    if (phase === "hub_phase") {
-        intensity = "low";
-        directive = `【階段：主世界日常/休整】
-        - **當前位置**：主世界（如：副本學校、主神空間、現實世界）。
-        - **重點**：
-          1. **戰後創傷與治癒**：描寫主角回到安全區後的放鬆與後怕。
-          2. **探索主世界真相**：發現主世界的秘密（如：學校的禁地、系統的漏洞）。
-          3. **CP 互動**：在沒有生命危險的環境下，兩人關係的微妙變化（曖昧、同居、吵架）。
-          4. **準備工作**：購買道具、強化能力，為下一次恐怖做準備。`;
-    } else if (phase === "setup") {
-        intensity = "high (suspense)";
-        directive = `【階段：副本導入/新人試煉】
-        - **情境**：突然被拉入異世界/恐怖場景。
-        - **重點**：
-          1. **未知與恐慌**：強調感官的陌生與恐懼。不要直接丟設定，讓主角去「看」和「聽」。
-          2. **觀察環境**：快速建立副本的獨特氛圍（古堡、荒村、太空船）。
-          3. **初遇隊友/NPC**：建立初步的人際關係（誰是豬隊友，誰是大腿）。`;
-    } else if (phase === "investigation") {
-        intensity = "medium";
-        directive = `【階段：探索與解謎 (進度 ${progress}%)】
-        - **重點**：尋找線索，試錯，觸發死亡Flag（由炮灰承擔）。
-        - **人性考驗**：在資源匱乏或生命受威脅時，隊友之間的猜忌與背叛。`;
-    } else if (phase === "climax") {
-        intensity = "high";
-        directive = `【階段：副本高潮】
-        - **重點**：BOSS戰或最終謎題揭曉。
-        - **高光時刻**：主角利用規則漏洞或道具完成反殺。
-        - **生死一線**：CP 為了保護對方而受傷或爆發。`;
-    } else if (phase === "resolution") {
-        intensity = "low";
-        directive = `【階段：副本結算】
-        - **重點**：逃出生天。回歸主世界前的最後一刻。
-        - **餘韻**：看著崩塌的副本或死去的隊友，產生對無限世界的無力感。`;
-    } else if (phase === "finale") {
-        intensity = "high";
-        directive = "【終局模式】全書高潮。揭開無限世界的終極真相。";
+    // =====================================================
+    // 🏫 BRANCH A: 主世界劇情線 (The Hub Story)
+    // =====================================================
+    if (phase.startsWith("hub")) {
+        // 重置副本進度
+        nextInstanceProgress = 0;
+
+        // --- A1. 剛進入主世界 (Intro) ---
+        if (phase === "hub_intro") {
+            intensity = "high (suspense)";
+            directive = `【階段：新人報到/世界觀導入】
+            - **場景**：主角初次抵達主世界（學校/公寓/列車）。
+            - **核心衝突**：對陌生規則的不適應，以及「資深者/NPC」的下馬威。
+            - **風格**：強調「荒誕感」與「規則的致命性」。
+            - **結尾**：不要進副本！結尾停在主角發現這個世界「貨幣/學分」的重要性。`;
+
+            // 下一步：進入主世界日常 (拉長休整期)
+            nextPhase = "hub_story";
+            nextSubPhase = "normal_settling_in"; // 新增緩衝階段
+            nextHubTension = 5; // 降低初始張力
+        }
+
+        // --- A2. 副本回歸結算 (Return) ---
+        else if (phase === "hub_return") {
+            intensity = "low";
+            directive = `【階段：副本結算與發酵】
+            - **場景**：剛從死亡邊緣回來，全校/全區通報成績。
+            - **爽點**：主角因為在副本裡的騷操作而獲得高評價/高獎勵，震驚路人。
+            - **休憩**：必須描寫主角**回到安全區的放鬆感**。洗熱水澡、吃頓好的、睡個好覺。這與副本的緊張形成對比 (起承轉合-合)。
+            - **伏筆**：獲得關於主世界真相的碎片線索。`;
+
+            // 下一步：進入主世界日常
+            nextPhase = "hub_story";
+            nextSubPhase = "normal_rest"; // 強制休息階段
+            nextHubTension = 10;
+        }
+
+        // --- A3. 主世界劇情引擎 (Core Engine) ---
+        else if (phase === "hub_story") {
+
+            // [觸發判斷]：如果張力爆表，強制進入副本
+            // [觸發判斷]：如果張力爆表，強制進入副本
+            if (hubTension >= 80) {
+                return {
+                    phase: "dungeon_entry",
+                    directive: `【轉折點：入局】主世界劇情張力已達臨界點。請根據**上一章的劇情發展**（是仇家追殺？欠債？還是系統強制？），設計一個最符合邏輯的「入局理由」，並描寫主角被吸入/傳送進副本的過程。`,
+                    hubTension: 0,
+                    cycleNum: cycleNum + 1,
+                    instanceProgress: 0
+                };
+            }
+
+            // [子階段演繹]：增加休整與日常的篇幅
+            if (subPhase === "normal_settling_in" || subPhase === "normal_rest") {
+                intensity = "low";
+                directive = `【主世界：日常與整備】
+                - **重點**：描寫主角如何利用上個副本的獎勵強化自己（購買道具、鍛鍊技能）。
+                - **人際**：與隊友/CP 在非戰鬥狀態下的相處（一起吃飯、逛街、交換情報）。
+                - **氛圍**：暫時的寧靜，但隱約能感覺到主世界的違和感。`;
+
+                nextSubPhase = "normal_conflict";
+                nextHubTension += 10;
+            }
+            else if (subPhase === "normal_conflict" || subPhase === "normal") {
+                intensity = "low (comedy/drama)";
+                directive = `【主世界：荒誕日常】
+                - **禁止寫副本！** 請描寫這個詭異世界的日常生活（如：用眼球做菜的食堂、會咬人的販賣機）。
+                - **事件**：主角試圖用「現實世界的邏輯」去解構這裡的詭異規則，產生冷幽默效果。
+                - **微衝突**：遇到一些不長眼的小反派（霸凌者/奸商），輕鬆解決，但埋下禍根。`;
+
+                // 推演：日常 -> 衝突
+                nextSubPhase = "conflict_escalation";
+                nextHubTension += 15;
+            }
+            else if (subPhase === "conflict_escalation" || subPhase === "conflict") {
+                intensity = "medium";
+                directive = `【主世界：衝突升級】
+                - **事件**：主世界的勢力（學生會/惡霸/執法隊/貪婪NPC）找主角麻煩。
+                - **反擊**：主角利用規則漏洞狠狠打臉，雖然贏了，但徹底得罪了對方。
+                - **氛圍**：山雨欲來風滿樓。`;
+
+                // 推演：衝突 -> 危機
+                nextSubPhase = "climax";
+                nextHubTension += 25;
+            }
+            else if (subPhase === "climax") {
+                intensity = "high";
+                directive = `【主世界：危機爆發】
+                - **事件**：反派動用權限封殺主角（如：斷水斷電、列入死亡名單）。
+                - **決策**：為了生存或反殺，主角決定**主動**去挑戰某個傳說中的「死亡副本」（置之死地而後生）。
+                - **結尾**：停在進入副本傳送門的前一刻。`;
+
+                // 推演：危機 -> 滿張力 (下一章進副本)
+                nextHubTension = 100;
+            }
+        }
     }
 
-    return { phase, intensity, directive, arcName, cycleNum, instanceProgress: progress };
+    // =====================================================
+    // 🗡️ BRANCH B: 副本攻略線 (The Dungeon Run)
+    // =====================================================
+    else {
+        // 自然增長進度 (如果 planner 沒給具體數值)
+        nextInstanceProgress = Math.min(instanceProgress + 10, 100);
+
+        // 副本階段劃分
+        if (nextInstanceProgress <= 15) {
+            nextPhase = "setup"; // 起
+            intensity = "high (horror)";
+            directive = `【副本階段：開局殺/規則導入 (起)】
+            - **場景**：陌生的恐怖環境。
+            - **重點**：展示副本的「致死規則」。讓一個炮灰觸發規則死亡，以此警示主角。
+            - **反應**：主角冷靜分析（或嫌棄鬼怪太醜），展現高智商/強心理素質。`;
+        }
+        else if (nextInstanceProgress <= 55) {
+            nextPhase = "investigation"; // 承
+            intensity = "medium";
+            directive = `【副本階段：探索與解謎 (承)】
+            - **玩法**：利用規則漏洞，或發現鬼怪的生前執念。
+            - **CP高光**：兩人在危險中互相交付後背。
+            - **劇情**：不要只是打怪，要揭露副本背後的悲劇故事。`;
+        }
+        else if (nextInstanceProgress <= 80) {
+            nextPhase = "twist"; // 轉
+            intensity = "high (suspense)";
+            directive = `【副本階段：反轉與危機 (轉)】
+            - **轉折**：原本以為的通關規則是假的/陷阱！或者BOSS進入了第二階段。
+            - **困境**：主角團陷入絕境，原本的計畫失效。
+            - **爆點**：揭露副本最深層的殘酷真相（Trope Reveal）。`;
+        }
+        else if (nextInstanceProgress < 95) {
+            nextPhase = "climax"; // 合 (高潮)
+            intensity = "high";
+            directive = `【副本階段：最終決戰/破局 (合)】
+            - **高潮**：BOSS 狂暴或規則全面崩塌。
+            - **反轉**：主角揭開副本真相，完成「完美通關」的關鍵操作。
+            - **張力**：CP 為了保護對方受傷，或展現出瘋批的一面。`;
+        }
+        else {
+            nextPhase = "resolution";
+            intensity = "low";
+            directive = `【副本階段：結算離開】
+            - **結局**：看著副本崩塌或BOSS解脫。
+            - **收穫**：獲得關鍵道具或大量積分。
+            - **結尾**：傳送光芒亮起，準備回到主世界打臉那些等著看笑話的人。`;
+
+            // ⚠️ 關鍵：副本結束後，強制把下一章的狀態改回 "hub_return"
+            // 這裡我們只標記 "resolution"，真正的狀態切換交給下一次 director 執行
+            // 或者我們可以在 planInfinite 裡處理這個切換，這裡為了保險，我們回傳一個標記
+        }
+    }
+
+    // 如果本章是副本結算 (Resolution)，預判下一章回到主世界
+    if (phase === "resolution") {
+        return {
+            phase: "hub_return", // 強制切換回主世界
+            sub_phase: "normal",
+            intensity: "low",
+            directive: "【回歸】傳送回主世界，面對眾人的震驚。",
+            arcName: "主世界：凱旋",
+            hubTension: 0,
+            cycleNum: nextCycleNum,
+            instanceProgress: 0
+        };
+    }
+
+    return {
+        phase: nextPhase,
+        sub_phase: nextSubPhase,
+        intensity: intensity,
+        directive: directive,
+        arcName: arcName,
+        hubTension: nextHubTension,
+        cycleNum: nextCycleNum,
+        instanceProgress: nextInstanceProgress
+    };
 };
 
 // ==========================================
@@ -656,70 +811,76 @@ export const planInfinite = async ({
     tone = "一般",
     lastPlotState = null,
     useDeepSeek = false,
-    novelId = null
+    novelId = null,
+    novelContext = {}
 }) => {
     const isRuleBased = tags.includes("規則怪談");
+
     // 1. 狀態初始化
+    let phase = director.phase;
+    let subPhase = director.sub_phase;
+    let cycleNum = director.cycleNum;
+    let instanceProgress = director.instanceProgress;
+
     let currentDungeon = lastPlotState?.current_dungeon || null;
     let currentRules = lastPlotState?.current_rules || null;
-    let cycleNum = lastPlotState?.cycle_num ?? 1;
-    let instanceProgress = lastPlotState?.instance_progress || 0;
     let usedThemes = lastPlotState?.used_themes || [];
-    let phase = lastPlotState?.phase || "setup"; // default
 
-    // 2. 階段流轉邏輯 (修正版)
-    // 處理從「序章/休整」進入「新副本」的邏輯
+    // 獲取第一章的懸念筆記
+    const cliffhangerNote = lastPlotState?.cliffhanger_note || "無";
+    // 動態設定提示
+    const dynamicPrompt = getDynamicSettingPrompt(novelContext);
 
-    // 如果上一章是 hub_intro (序章)，下一章強制進入第一個副本 (Setup)
-    if (phase === 'hub_intro') {
-        phase = 'setup';
-        instanceProgress = 0;
-        cycleNum = 1; // 正式開始第1卷
+    // 2. 特殊狀態處理
+    let metaPlanningInstruction = "";
+    const summary = novelContext.summary || "";
+    const mainWorld = novelContext.settings?.main_world_setting || {};
+    const relationships = novelContext.relationships || []; // 獲取關係圖
+    const combinedText = (summary + (mainWorld.type || "")).toLowerCase();
 
-        // FIX: Retrieve preloaded dungeon (from settings)
-        if (lastPlotState?.preloaded_dungeon) {
-            currentDungeon = lastPlotState.preloaded_dungeon;
-            // Update arcName to match the preloaded dungeon
-            director.arcName = currentDungeon.dungeon_name;
-        } else {
-            currentDungeon = null; // Will trigger generation
-        }
+    if (combinedText.includes("直播") || combinedText.includes("綜藝")) {
+        metaPlanningInstruction = `
+        【⚠️ 特殊策劃要求：綜藝直播流】
+        這是一場直播綜藝。大綱中必須包含：
+        1. **互動環節**：設計觀眾/彈幕的反應節點（如：主角遇到危險時，彈幕在賭她死）。
+        2. **節目效果**：主角是否為了人氣/打賞而故意做出驚險動作？
+        3. **場外干預**：是否有土豪觀眾打賞了關鍵道具？
+        `;
     }
-    // 如果上一章是 rest (休整)，下一章進入新副本
-    else if (director.phase === 'setup' && (!currentDungeon || instanceProgress >= 100)) {
-        instanceProgress = 0;
+
+    // (A) 清空副本數據
+    if (phase === 'hub_return' || phase.startsWith('hub')) {
         currentDungeon = null;
-        cycleNum += 1;
-        phase = 'setup';
+        currentRules = null;
     }
-    else if (director.phase === 'rest') {
-        phase = 'rest';
-        instanceProgress = 0;
-        currentDungeon = null;
+
+    // (B) 預設副本
+    if (phase === 'setup' && cycleNum === 1 && lastPlotState?.preloaded_dungeon && !currentDungeon) {
+        currentDungeon = lastPlotState.preloaded_dungeon;
+        director.arcName = currentDungeon.dungeon_name;
     }
-    // 副本內推進
-    else {
+
+    // (C) 有機進度調整
+    if (!phase.startsWith('hub') && phase !== 'setup' && phase !== 'resolution') {
         const resolvedCluesCount = clues.filter(c => c.includes("已解決") || c.includes("解開")).length;
         const organicProgress = (Math.min(resolvedCluesCount / 5, 1) * 50);
-        let newProgress = Math.max(instanceProgress + 5, organicProgress);
-        instanceProgress = instanceProgress > 0 ? Math.max(instanceProgress, newProgress) : newProgress;
-        if (instanceProgress > 100) instanceProgress = 100;
+        let newProgress = Math.max(instanceProgress, organicProgress);
+        if (newProgress > 100) newProgress = 100;
+        instanceProgress = newProgress;
 
-        // 階段判定
         if (instanceProgress < 15) phase = "setup";
-        else if (instanceProgress < 75) phase = "investigation";
+        else if (instanceProgress < 55) phase = "investigation";
+        else if (instanceProgress < 80) phase = "twist";
         else if (instanceProgress < 95) phase = "climax";
         else phase = "resolution";
     }
 
-    // 4. 副本生成 (Lazy Generation)
+    // 4. 副本生成
     const isNewDungeon = phase === 'setup' && !currentDungeon;
 
-    // FIX: Initialize preloaded dungeon (if it exists but has no rules set up yet)
     if (phase === 'setup' && currentDungeon && !currentRules) {
         const rulesList = isRuleBased ? (currentDungeon.core_rules || []) : (currentDungeon.missions || ["任務：存活"]);
         currentRules = { title: isRuleBased ? "規則守則" : "任務面板", rules: rulesList, hidden_truth: "待探索" };
-
         if (novelId) {
             try {
                 await supabase.from('dungeons').insert({
@@ -752,35 +913,83 @@ export const planInfinite = async ({
     }
 
     const gameplayOps = (() => {
-        if (director.phase === "setup") return isRuleBased ? "展示【規則守則】，但重點是主角們對規則的吐槽/不屑/恐慌反應。" : "發布【主線任務】，重點描寫主角團的磨合與分歧。";
-        if (director.phase === "investigation") return "觸發【羈絆考驗】或【人性抉擇】。在探索中揭露隊友的過去或 CP 的默契。";
-        if (director.phase === "climax") return "全員高光時刻。利用團隊配合或 CP 的犧牲/爆發來破局，而不是單純靠數值碾壓。";
-        if (director.phase === "rest" || director.phase === "hub_phase" || director.phase === "hub_intro") return "主神空間的溫馨/曖昧日常，修復創傷。";
+        if (phase === "setup") return isRuleBased ? "展示【規則守則】，但重點是主角們對規則的吐槽/不屑/恐慌反應。" : "發布【主線任務】，重點描寫主角團的磨合與分歧。";
+        if (phase === "investigation") return "觸發【羈絆考驗】或【人性抉擇】。在探索中揭露隊友的過去或 CP 的默契。";
+        if (phase === "twist") return "【劇情急轉直下】發現原本的推論是錯的！環境發生劇變，或者隊友背叛/失蹤。";
+        if (phase === "climax") return "全員高光時刻。利用團隊配合或 CP 的犧牲/爆發來破局，而不是單純靠數值碾壓。";
+        if (phase === "rest" || phase.startsWith("hub")) return "主世界休整。重點在於：花錢/強化、人際交流、日常放鬆。禁止高強度戰鬥。";
         return "推進劇情，強調人與人的互動。";
     })();
 
     const dungeonContext = currentDungeon ? `【🏯 當前副本：${currentDungeon.dungeon_name}】\n難度：${currentDungeon.difficulty}\n背景：${currentDungeon.background_story}\n核心玩法：${currentDungeon.mechanics?.gameplay_focus}\n通關條件：${currentDungeon.endings?.normal}` : "【當前場景】主神空間/現實世界";
     const rulesContext = currentRules ? `【📜 ${currentRules.title}】\n${currentRules.rules.join('\n')}` : "";
 
+    const getMainWorldFlavor = (setting) => {
+        if (!setting) return "普通的休息區互動";
+        const type = setting.type || "其他";
+        const name = setting.name || "主神空間";
+        if (type.includes("直播")) return `【主世界：${name}】直播後台，處理粉絲評論，排名競爭。`;
+        if (type.includes("公寓")) return `【主世界：${name}】鄰里日常，噪音投訴，繳納壽命租金。`;
+        if (type.includes("列車")) return `【主世界：${name}】封閉旅途，車廂情報交換，乘務員刁難。`;
+        return `【主世界：${name}】殘酷體制，兌換強化，勢力衝突。`;
+    };
+    const mainWorldFlavor = getMainWorldFlavor(novelContext.main_world_setting);
+
+    const getDungeonReason = (lastPlotState) => {
+        if (lastPlotState?.hub_tension >= 100) return "【進入原因：被迫/破局】因為主世界的矛盾無法調和，主角必須進入副本尋求生機。";
+        return "【進入原因：常規輪迴】系統的強制召喚。";
+    };
+
     const prompt = `
     你是一位無限流小說策劃。請根據以下資訊規劃下一章大綱。
     ${INFINITE_ANTI_CLICHE}
+    ${mainWorldFlavor}
+    ${metaPlanningInstruction}
+    ${dynamicPrompt}
+    
+    【⚠️ 嚴格設定一致性 (Consistency Check)】
+    1. **禁止戰力崩壞**：目前是第 ${cycleNum} 個副本。請嚴格限制力量體系。
+       - 如果標籤是「現代/校園」，**嚴禁**出現魔法、修仙、高科技武器。
+       - 主角只能用智慧、規則漏洞或基礎道具破局。
+    2. **禁止類型亂入**：除特殊標註外，不要在西方背景出現東方道士，不要在靈異背景出現外星人。
+    3. **起承轉合**：請嚴格遵守當前階段 (${phase}) 的敘事功能，不要搶拍。
+    
     【當前狀態】
-    - 階段：${director.phase.toUpperCase()} (進度: ${Math.floor(instanceProgress)}%)
+    - 階段：${phase.toUpperCase()} (進度: ${Math.floor(instanceProgress)}%)
     - 導演指令：${director.directive}
+    - 上一章結尾懸念：${cliffhangerNote} (重要！請緊接此處)
     - **玩法策略**：${gameplayOps}
+    
+    ${dungeonContext}
+    ${rulesContext}
     ${dungeonContext}
     ${rulesContext}
     【隊友狀態】${characters.map(c => `- ${c.name}: ${c.status || '正常'}`).join('\n') || "暫無詳細隊友資訊"}
+    【人際關係矩陣 (Relationship Graph)】
+    ${relationships.length > 0 ? relationships.map(r => `${r.source} -> ${r.target}: [${r.type}] (狀態: ${r.status}) | ${r.description}`).join('\n') : "暫無關係記錄 (請在輸出中建立)"}
+    
     【設計圖】${typeof blueprint === 'string' ? blueprint : JSON.stringify(blueprint)}
     【前情提要】${contextSummary}
     【線索】${clues.length > 0 ? clues.join('\n') : "無"}
+    【本章任務】
+    ${phase === 'setup' ? getDungeonReason(lastPlotState) : ''}
+    
     【任務】
-    1. 根據副本進度，推進劇情。
-    2. **機制演繹**：${isRuleBased ? '讓主角分析規則邏輯。' : '讓主角執行任務目標。'}
-    3. **人物互動 (關鍵)**：本章必須包含至少一位隊友的關鍵互動，不要讓他們變成背景板。
-    4. 衝突設計與感情規劃。
-    回傳 JSON: { "chapter_title": "...", "outline": "...", "key_clue_action": "...", "romance_moment": "...", "suggested_progress_increment": 5, "should_finish_instance": false }
+    1. **無縫銜接**：開頭必須緊接上一章的最後一個動作，**嚴禁重複描寫上一章已經發生過的事情**。
+    2. 根據副本進度，推進劇情。
+    3. **機制演繹**：${isRuleBased ? '讓主角分析規則邏輯。' : '讓主角執行任務目標。'}
+    4. **人物互動**：本章必須包含至少一位隊友的關鍵互動。
+    5. 衝突設計與感情規劃。
+    
+    回傳 JSON: { 
+        "chapter_title": "...", 
+        "outline": "...", 
+        "key_clue_action": "...", 
+        "romance_moment": "...", 
+        "relationship_updates": [ { "source": "...", "target": "...", "type": "...", "status": "Met/Close/Estranged", "description": "..." } ],
+        "suggested_progress_increment": 5, 
+        "should_finish_instance": false 
+    }
     `;
 
     let plan;
@@ -808,7 +1017,9 @@ export const planInfinite = async ({
 
 const writeInfiniteChapter = async ({ novelContext, plan, prevText, tone, pov, useDeepSeek, director, currentDungeon }) => {
     const { title, genre } = novelContext;
-    const { chapter_title, outline, key_clue_action, romance_moment } = plan;
+    const { chapter_title, outline, key_clue_action, romance_moment, relationship_updates } = plan;
+    const dynamicPrompt = getDynamicSettingPrompt(novelContext);
+    const relationships = novelContext.relationships || [];
 
     const charismaInstruction = `
     【人物高光 (Charisma)】
@@ -822,6 +1033,18 @@ const writeInfiniteChapter = async ({ novelContext, plan, prevText, tone, pov, u
     ${INFINITE_ANTI_CLICHE}
     【資訊】${title} | ${director.phase}
     【風格】${tone} | ${pov}
+    ${dynamicPrompt}
+
+    【⚠️ 設定紅線】
+    1. **嚴守設定**：如果主世界是「現代/低魔」，絕對不能出現「火球術」、「飛劍」等高魔描寫。所有道具必須符合該副本的時代背景。
+    2. **拒絕戰力膨脹**：主角這時候還是初期/中期，不要寫得像滿級大號屠新手村。
+    3. **起承轉合**：依照「Planner的大綱」寫，不要自己亂加沒頭沒尾的魔法設定。
+    
+    【人際關係守門員 (Relationship Guard)】
+    ${relationships.map(r => `- ${r.source} 與 ${r.target} 目前關係: ${r.status} (${r.type})`).join('\n')}
+    **強制規則**：
+    - 如果關係狀態是 "Not Met" 或 "Stranger"：**嚴禁**出現熟絡的對話。必須先描寫眼神接觸、試探、自我介紹。
+    - 如果關係是 "Ex/宿敵"：見面時必須有尷尬或敵意。
     
     【本章劇本 (Planner's Outline)】
     ${outline}
@@ -834,13 +1057,15 @@ const writeInfiniteChapter = async ({ novelContext, plan, prevText, tone, pov, u
     副本：${currentDungeon?.dungeon_name || "未知領域"}
     (請自行腦補環境細節，重點是營造恐怖/壓抑/詭異的氛圍)
 
-    【寫作重點】
-    1. **字數**：2000+。
-    2. **Show, Don't Tell**：不要告訴讀者「很危險」，要寫出怪物貼在耳邊的呼吸聲。
-    3. **感情線**：請務必執行大綱中的感情互動，這是讀者最想看的部分。
-    4. **結尾**：必須留有懸念 (Cliffhanger)。
+    【⚠️ 嚴格寫作禁令 (Critical)】
+    1. **禁止重複前文**：讀者已經看過上一章了。**絕對不要**在開頭寫「回顧」、「前情提要」或重新描寫上一章結尾已經發生過的動作。
+    2. **直接切入**：直接從大綱的第一個新動作開始寫。
+    3. **去 AI 味**：拒絕總結性語句（如「這一切才剛剛開始」）。
+    4. **Show, Don't Tell**：不要告訴讀者「很危險」，要寫出怪物貼在耳邊的呼吸聲。
+    5. **字數**：2000+。
+    6. **結尾**：必須留有懸念 (Cliffhanger)。
     
-    回傳 JSON: { "content": "...", "character_updates": [], "new_memories": [] }
+    回傳 JSON: { "content": "...", "character_updates": [], "new_memories": [], "relationship_updates": ${JSON.stringify(relationship_updates || [])} }
     `;
 
     try {
@@ -863,6 +1088,7 @@ export const generateInfiniteNextChapter = async (novelContext, previousContent,
 
     const infinitePlan = await planInfinite({
         novelId: novelContext.id,
+        novelContext,
         director,
         blueprint: blueprintStr,
         contextSummary: prevText,

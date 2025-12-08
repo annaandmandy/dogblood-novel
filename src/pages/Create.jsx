@@ -46,6 +46,9 @@ export default function Create() {
         loveInterest: {}
     });
 
+    // Relationship State
+    const [relationships, setRelationships] = useState([]);
+
     const [designBlueprint, setDesignBlueprint] = useState({});
     const [targetEndingChapter, setTargetEndingChapter] = useState(120);
     const [useDeepSeek, setUseDeepSeek] = useState(false); // Default to true (DeepSeek)
@@ -166,6 +169,9 @@ export default function Create() {
             if (randomSettings.design_blueprint) {
                 setDesignBlueprint(randomSettings.design_blueprint);
             }
+            if (randomSettings.relationships) {
+                setRelationships(randomSettings.relationships);
+            }
 
             // Save the exact state of what we generated to compare later
             setLastGeneratedSettings({
@@ -270,6 +276,7 @@ export default function Create() {
                         pov,
                         category,
                         design_blueprint: designBlueprint,
+                        relationships: relationships, // Save relationships
                         useDeepSeek,
                         plot_state: startResponse.plot_state // Save the initial plot state!
                     },

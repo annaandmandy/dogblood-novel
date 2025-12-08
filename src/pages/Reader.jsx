@@ -519,6 +519,34 @@ export default function Reader() {
                 settingsChanged = true;
             }
 
+            // Update Relationship Graph
+            if (aiResponse.chapter_plan?.relationship_updates || aiResponse.relationship_updates) {
+                // Combine updates from plan and final result (usually plan has it, but writer result might refine it)
+                // Actually writer result has 'relationship_updates' passed through from plan or updated.
+                // Let's use aiResponse.relationship_updates which comes from 'writeInfiniteChapter' return.
+                const updatesList = aiResponse.relationship_updates || aiResponse.chapter_plan?.relationship_updates || [];
+
+                if (updatesList.length > 0) {
+                    let currentRelationships = newSettings.relationships || [];
+
+                    updatesList.forEach(update => {
+                        // Find if this relationship already exists (check both directions just in case, or strict? Let's do strict for now as generated)
+                        const index = currentRelationships.findIndex(r =>
+                            (r.source === update.source && r.target === update.target)
+                        );
+
+                        if (index !== -1) {
+                            currentRelationships[index] = { ...currentRelationships[index], ...update };
+                        } else {
+                            currentRelationships.push(update);
+                        }
+                    });
+
+                    newSettings.relationships = currentRelationships;
+                    settingsChanged = true;
+                }
+            }
+
             if (settingsChanged) {
                 updates.push(
                     supabase.from('novels')
