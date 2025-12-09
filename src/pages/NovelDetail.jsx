@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, BookOpen, Trash2, Globe, Lock, User, Heart, List, Play, Info, X } from 'lucide-react';
+import { ArrowLeft, BookOpen, Trash2, Globe, Lock, User, Heart, List, Play, Info, X, Gamepad2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -134,7 +134,13 @@ export default function NovelDetail() {
     const protagonist = characters.find(c => c.role === '主角') || { name: novel.settings?.protagonist || '未知' };
     const loveInterest = characters.find(c => c.role === '對象/反派') || { name: novel.settings?.loveInterest || '未知' };
 
-    const actionButtonText = readingProgress ? `繼續閱讀 (第 ${readingProgress.chapterIndex} 章)` : (chapters.length > 0 ? "開始閱讀" : "開始創作");
+    const isInteractive = novel.genre === 'Interactive' || (novel.tags && novel.tags.includes('Interactive'));
+    const actionButtonLink = isInteractive ? `/interactive/${novel.id}` : `/read/${novel.id}`;
+
+    let actionButtonText = readingProgress ? `繼續閱讀 (第 ${readingProgress.chapterIndex} 章)` : (chapters.length > 0 ? "開始閱讀" : "開始創作");
+    if (isInteractive) {
+        actionButtonText = chapters.length > 0 ? "繼續遊戲" : "開始遊戲";
+    }
 
     return (
         <div className="min-h-screen bg-slate-950 pb-20">
@@ -178,7 +184,9 @@ export default function NovelDetail() {
                 <div className="flex flex-col md:flex-row gap-8">
                     {/* Cover Placeholder */}
                     <div className={`w-full md:w-48 aspect-[2/3] rounded-xl shadow-2xl ${genreStyle.bg} flex flex-col items-center justify-center p-6 text-center border ${genreStyle.border} shrink-0`}>
-                        <BookOpen size={48} className={`mb-4 ${genreStyle.text} opacity-50`} />
+                        <div className="mb-4 opacity-50">
+                            {isInteractive ? <Gamepad2 size={48} className={genreStyle.text} /> : <BookOpen size={48} className={genreStyle.text} />}
+                        </div>
                         <h2 className="font-bold text-xl text-white mb-2 line-clamp-3">{novel.title}</h2>
                         <span className={`text-xs px-2 py-1 rounded-full bg-black/20 ${genreStyle.text}`}>
                             {novel.genre}
@@ -196,7 +204,7 @@ export default function NovelDetail() {
                                     </span>
                                 ))}
                             </div>
-                            {readingProgress && (
+                            {readingProgress && !isInteractive && (
                                 <div className="text-sm text-purple-400 font-medium mb-2">
                                     上次讀到：第 {readingProgress.chapterIndex} 章
                                 </div>
@@ -234,10 +242,10 @@ export default function NovelDetail() {
                         {/* Desktop Action Button */}
                         <div className="hidden md:block pt-4">
                             <Link
-                                to={`/read/${novel.id}`}
+                                to={actionButtonLink}
                                 className="inline-flex items-center gap-2 px-8 py-3 bg-purple-600 hover:bg-purple-500 text-white rounded-full font-bold transition-all shadow-lg shadow-purple-900/20"
                             >
-                                <Play size={20} fill="currentColor" />
+                                {isInteractive ? <Gamepad2 size={20} /> : <Play size={20} fill="currentColor" />}
                                 {actionButtonText}
                             </Link>
                         </div>

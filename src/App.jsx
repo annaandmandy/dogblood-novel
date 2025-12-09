@@ -19,6 +19,7 @@ function App() {
           <Route path="square" element={<Square />} />
           <Route path="create" element={<Create />} />
           <Route path="interactive" element={<Interactive />} />
+          <Route path="interactive/:id" element={<Interactive />} />
           <Route path="novel/:id" element={<NovelDetail />} />
           <Route path="profile" element={<Profile />} />
         </Route>
