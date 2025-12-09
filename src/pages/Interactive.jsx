@@ -151,6 +151,9 @@ export default function Interactive() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ settings, tags: tagList, tone, useDeepSeek: false })
             });
+
+            if (!res.ok) throw new Error("Failed to start game");
+
             const data = await res.json();
 
             // B. Save to Supabase (Init)

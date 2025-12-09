@@ -40,9 +40,11 @@ export const generateInteractiveSettings = async (tags = [], tone = "一般", ca
     1. **核心梗**：一句話講清楚遊戲的目標（如：在全員惡人的學校活到畢業、在驚悚直播中成為榜一）。
     2. **主角 (玩家)**：性格必須鮮明（如：高智商厭世、暴力破局、精緻利己）。為什麼進入這個世界？
     3. **關鍵角色 (CP)**：他是這個世界的大佬、監考官、還是危險的怪物？他與主角的關係是「相愛相殺」或「危險共犯」。
-    4. **開局情境 (Opening Situation)**：**不要寫死第一關副本！** 請設計一個「剛進入世界」的狀態。
-       - *範例 A (主世界開局)*：剛收到錄取通知書，站在詭異學校的門口，周圍是其他驚恐的新人。
-       - *範例 B (副本開局)*：在搖晃的幽靈列車上醒來，面前坐著沒有臉的乘客。
+    4. **開局情境 (Opening Situation)**：設計一個「剛進入世界」的具體場景描述 (主角在哪裡？正在發生什麼？)。
+    5. **第一關副本 (First Level)**：設計新手關卡的具體設定。
+       - **副本名稱**：(如：幽靈高中數學考試)
+       - **通關任務**：(如：找到消失的監考官、存活到考試結束)
+       - **死亡禁忌**：(如：不可作弊、不可回頭看)
 
     【回傳 JSON】
     {
@@ -50,7 +52,8 @@ export const generateInteractiveSettings = async (tags = [], tone = "一般", ca
       "summary": "精簡有力的文案 (包含主角、CP、世界觀)",
       "protagonist": { "name": "...", "trait": "性格標籤", "specialty": "金手指/特長" },
       "loveInterest": { "name": "...", "identity": "身份 (如：瘋批監考官)", "dynamic": "互動模式 (如：貓鼠遊戲)" },
-      "opening_situation": "開局的具體場景描述 (主角在哪裡？正在發生什麼？)"
+      "opening_situation": "開局的具體場景描述 (主角在哪裡？正在發生什麼？)",
+      "first_level_brief": "第一關副本簡介 (包含副本名稱、通關任務、死亡禁忌，約 50-100 字)"
     }
     `;
 
@@ -124,7 +127,7 @@ const writeInteractiveSegment = async ({ novelContext, plan, tone, useDeepSeek }
     你是一位風格犀利的無限流小說家。請根據大綱撰寫一段**互動小說的劇本**。
 
     **風格**：${toneDesc}
-    ${GAME_STYLE_GUIDE}
+    ${INTERACTIVE_STYLE_GUIDE}
     ${ANTI_CLICHE_INSTRUCTIONS}
 
     【小說設定】
