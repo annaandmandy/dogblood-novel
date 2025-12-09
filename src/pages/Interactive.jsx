@@ -117,7 +117,7 @@ export default function Interactive() {
         setLoading(true);
         try {
             const tagList = tags.split(/[,，\s]+/).filter(Boolean);
-            const res = await fetch(`${API_BASE} /api/interactive / settings`, {
+            const res = await fetch(`${API_BASE}/api/interactive/settings`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ tags: tagList, tone, category, useDeepSeek: false })
@@ -146,7 +146,7 @@ export default function Interactive() {
             const tagList = tags.split(/[,，\s]+/).filter(Boolean);
 
             // A. Generate First Segment
-            const res = await fetch(`${API_BASE} /api/interactive / start`, {
+            const res = await fetch(`${API_BASE}/api/interactive/start`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ settings, tags: tagList, tone, useDeepSeek: false })
@@ -249,7 +249,7 @@ export default function Interactive() {
             setGameState('playing');
 
             // Optionally navigate to the permalink so refresh works
-            navigate(`/ interactive / ${newNovel.id} `, { replace: true });
+            navigate(`/interactive/${newNovel.id}`, { replace: true });
 
         } catch (e) {
             console.error(e);
@@ -273,7 +273,7 @@ export default function Interactive() {
             const previousContent = history.filter(h => h.type === 'story').slice(-1)[0]?.content || "";
 
             // A. Generate Next Segment
-            const res = await fetch(`${API_BASE} /api/interactive / next`, {
+            const res = await fetch(`${API_BASE}/api/interactive/next`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -435,7 +435,7 @@ export default function Interactive() {
                                                 <div className="text-xs text-slate-500">{char.role}</div>
                                             </div>
                                         </div>
-                                        <span className={`text - xs px - 2 py - 1 rounded border ${char.status === 'Alive' ? 'text-green-400 border-green-900/30 bg-green-900/10' : 'text-red-400 border-red-900/30 bg-red-900/10'} `}>
+                                        <span className={`text-xs px-2 py-1 rounded border ${char.status === 'Alive' ? 'text-green-400 border-green-900/30 bg-green-900/10' : 'text-red-400 border-red-900/30 bg-red-900/10'}`}>
                                             {char.status}
                                         </span>
                                     </div>
@@ -573,7 +573,7 @@ export default function Interactive() {
                         className="flex-1 overflow-y-auto p-4 space-y-6 scroll-smooth pb-32"
                     >
                         {history.map((item, idx) => (
-                            <div key={idx} className={`animate - fade -in ${item.type === 'choice' ? 'flex justify-end' : ''} `}>
+                            <div key={idx} className={`animate-fade-in ${item.type === 'choice' ? 'flex justify-end' : ''}`}>
                                 {item.type === 'story' ? (
                                     <div className="prose prose-invert prose-p:text-slate-300 prose-headings:text-slate-100 max-w-none">
                                         <div className="whitespace-pre-wrap leading-relaxed text-base md:text-lg font-serif tracking-wide bg-slate-900/30 p-4 rounded-xl border border-slate-800/50 shadow-sm hover:border-slate-700 transition-colors">
