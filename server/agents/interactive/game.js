@@ -161,7 +161,15 @@ const writeInteractiveSegment = async ({ novelContext, plan, tone, useDeepSeek }
             console.warn("DeepSeek failed, falling back to Gemini retry...");
         }
     }
-    return await generateWithRetry(prompt, "Gemini");
+    // Fallback or Primary Gemini Call
+    try {
+        const model = getGeminiModel(true);
+        const res = await model.generateContent(prompt);
+        return cleanJson(res.response.text());
+    } catch (e) {
+        console.error("Gemini Generation Failed:", e);
+        return null;
+    }
 };
 
 // ==========================================
