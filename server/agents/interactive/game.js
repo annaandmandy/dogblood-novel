@@ -120,7 +120,7 @@ const planInteractiveSegment = async ({ contextSummary, userChoice, novelContext
 // ==========================================
 // 3. 劇本寫作 (The Novelist)
 // ==========================================
-const writeInteractiveSegment = async ({ novelContext, plan, tone, useDeepSeek }) => {
+const writeInteractiveSegment = async ({ novelContext, plan, tone, useDeepSeek, isStart = false }) => {
     const toneDesc = getToneInstruction(tone);
 
     const prompt = `
@@ -139,7 +139,9 @@ const writeInteractiveSegment = async ({ novelContext, plan, tone, useDeepSeek }
 
     【寫作要求】
     1. **字數**：**800 - 1200 字** (短小精悍，不要長篇大論)。
-    2. **開頭**：直接承接上一次的選擇後果，不要寫「前情提要」。
+    ${isStart
+            ? "2. **開頭**：這是小說的第一章。請從【開局情境】開始寫起，詳細描繪主角進入世界/副本的瞬間，建立代入感與懸念。"
+            : "2. **開頭**：直接承接上一次的選擇後果，不要寫「前情提要」。"}
     3. **結尾**：必須停在**主角準備做出行動**的那一刻，與下方的選項無縫銜接。
     4. **CP感**：必須描寫主角與 CP 之間的眼神、動作或語言交鋒（張力拉滿）。
     5. **嚴禁出現選項**：請不要在正文結尾列出 A/B/C 選項，只需寫劇情。選項會由系統另外顯示。
@@ -204,7 +206,8 @@ export const generateInteractiveStart = async (settings, tags = [], tone = "一�
         novelContext: { settings },
         plan,
         tone,
-        useDeepSeek
+        useDeepSeek,
+        isStart: true
     });
 
     if (!script || !script.content) {
