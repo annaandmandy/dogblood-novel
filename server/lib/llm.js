@@ -129,31 +129,34 @@ export const getPovInstruction = (pov) => {
 
 export const polishContent = async (draft, tone, pov) => {
     const model = getGeminiModel(false);
-    const editorPrompt = `你是一位資深的網文主編。請對以下初稿進行【深度潤色】。
 
-${ANTI_CLICHE_INSTRUCTIONS}
+    const editorPrompt = `
+    你是小說語言潤色者 Polish Agent。
 
-【潤色目標】
-1. **去除AI味**：消除機械重複的句式，增加口語化與生動感。
-2. **去除冗餘**：刪除無意義的過渡句與重複的劇情回顧。
-3. **增強畫面感**：多用感官描寫（視覺、聽覺、觸覺）。
-4. **符合基調**：${tone}。
-5. **嚴格輸出格式**：**只輸出潤色後的小說正文**。絕對不要輸出「【深度潤色版】」、「以下是潤色後的內容」等任何前言後語。不要輸出標題。
+    【任務】
+    在不更改任何劇情事件、邏輯、對話內容的前提下：
 
-[初稿]
-${draft}`;
+    - 改善語氣流暢度
+    - 增加畫面感與感官描寫
+    - 消除 AI 味（重複句式、模板句）
+    - 保持 POV 與 Tone 一致
+
+    【嚴禁】
+    - 新增事件
+    - 刪除事件
+    - 推進或改變劇情
+    - 添加設定（規則、道具等）
+
+    只輸出潤色後最終正文，不得有任何解說。
+
+    【初稿】
+    ${draft}
+    `;
 
     try {
         const result = await model.generateContent(editorPrompt);
-        let polished = result.response.text();
-
-        // Post-processing to remove common AI prefixes
-        polished = polished.replace(/^【.*?】\s*/g, '')
-            .replace(/^\[.*?\]\s*/g, '')
-            .replace(/^以下是.*?\n/g, '')
-            .replace(/^Here is.*?\n/g, '')
-            .trim();
-
-        return polished;
-    } catch (e) { return draft; }
+        return result.response.text().trim();
+    } catch {
+        return draft;
+    }
 };

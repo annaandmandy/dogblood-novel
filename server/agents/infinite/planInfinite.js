@@ -6,6 +6,7 @@ import {
     getToneInstruction,
     getPovInstruction,
 } from "../../lib/llm.js";
+import { editorInfinite } from "../editor.js";
 
 import { supabase } from '../../lib/supabase.js';
 
@@ -482,21 +483,11 @@ export const generateInfiniteStart = async (settings, tags = [], tone = "一般"
 
     const dynamicPrompt = getDynamicSettingPrompt(settings);
 
-    // 入局邏輯：防止斷片
-    const ENTRY_INSTRUCTION = `
-    【⚠️ 開篇關鍵：拒絕斷片 (Entry Continuity)】
-    請再次閱讀簡介：${settings.summary}
-    1. **入局**：必須從簡介中的「入局原因」（如車禍、簽約、目擊）切入，不要寫「一覺醒來失憶」。
-    2. **過渡**：描寫現實世界是如何扭曲成異世界的（如：走廊無限延伸、手機變成血紅色）。
-    3. **初探**：主角抵達主世界（非副本），感受到這個社會的惡意與規則。
-    `;
-
     const prompt = `
-    你是一位無限流小說家。請撰寫**第一章**。
+    你是一位專業無限流小說作者，負責撰寫「第一章」。
     ${styleGuide}
     ${INFINITE_STYLE_GUIDE}
     ${dynamicPrompt}
-    ${ENTRY_INSTRUCTION}
 
     【小說設定】
     - 標題：${settings.title}
@@ -505,23 +496,58 @@ export const generateInfiniteStart = async (settings, tags = [], tone = "一般"
     - 主角：${JSON.stringify(settings.protagonist)}
     - 對象：${JSON.stringify(settings.loveInterest)}
 
-    【寫作任務】
-    1. 寫出一個令人毛骨悚然的開頭。
-    2. 讓主角迅速意識到處境，並展現出不同於常人的反應（金手指/性格）。
-    3. **結尾懸念**：停在一個衝突即將爆發，或者發現驚人真相的瞬間。
-    4. 字數：2000+。
+    【第一章的任務】
+    第一章（Pilot Chapter）不是正式劇情，它的作用是：
+    1. 從現實世界進入主世界（Hub）。
+    2. 展示主角的性格、語氣、觀察方式。
+    3. 描寫主世界給主角的第一印象（壓迫感、規則感、荒誕感）。
+    4. 建立 CP / 核心角色的第一次「視覺印象」（但不強求互動）。
+    5. 為第二章留下一個明確的事件入口（不跳副本）。
 
-    【回傳 JSON】
+    【嚴禁】
+    - 禁止進入副本（Dungeon）。
+    - 禁止 info dump（如整段說明規則、金手指、世界觀）。
+    - 禁止主角一開始就理解體系（主角一定是困惑的）。
+    - 禁止寫系統面板、任務欄、能力數值。
+    - 禁止大量配角登場。
+    - 禁止寫完整衝突，只能鋪陳壓力。
+
+    【敘事結構】
+    第一章必須遵循以下 4 步驟：
+
+    (1) 現實世界中的引爆點
+    例：目擊事件、收到訊息、某個日常異常化。
+
+    (2) 現實逐步扭曲
+    例：光線異變、走廊變長、手機彈出血色字、人的臉模糊。
+
+    (3) 主世界的第一次亮相（Hub）
+    請描寫：場景、氣味、空氣、規則感、階層感。
+    不要一次講完，全部要「Show, not tell」。
+
+    (4) 收束在一個明確的懸念點（Hook）
+    例：
+    - 一個「不該說話」的物件對主角說：歡迎。
+    - 身後傳來腳步聲。
+    - 牆壁上的字開始變動。
+    - 廣播叫出主角的名字。
+
+    【語氣要求】
+    - 用主角視角（POV）
+    - 用沉浸式描寫
+    - 不要寫成摘要
+    - 要有壓迫感與陌生感
+
+    【輸出格式】
     {
-      "content": "...",
-      "plot_state": {
-          "phase": "hub", 
-          "sub_phase": "intro",
-          "hub_tension": 20, // 第一章通常會積累一點張力
-          "cycle_num": 0,
-          "current_dungeon": null
-      },
-      "cliffhanger_note": "第一章結尾停在主角看到了牆上的血字規則，並且身後傳來了腳步聲。" 
+    "content": "正文 1800~2600 字，沒有任何前言、說明或 JSON 外文字。",
+    "plot_state": {
+        "phase": "hub_intro",
+        "cycle_num": 0,
+        "hub_tension": 10,
+        "current_dungeon": null
+    },
+    "cliffhanger_note": "下一章由主世界事件推動，而非副本。必須給下一章一個明確入口。"
     }
     `;
 
@@ -585,215 +611,175 @@ export const generateDungeonDesign = async (arcName, tone, tags = [], cycleNum, 
 // ==========================================
 // 🎬 Infinite Flow Director (無限流導演 - 事件驅動版)
 // ==========================================
+// ==========================================
+// 🎬 Infinite Flow Director (無限流導演 - 精簡版)
+// ==========================================
 export const directorInfinite = (currentChapterIndex, lastPlotState, totalChapters) => {
-    // 1. 初始化狀態讀取
-    // 如果是第一章，預設為 "hub_intro"
-    let phase = lastPlotState?.phase || "hub_intro";
-    let subPhase = lastPlotState?.sub_phase || "normal";
-    let hubTension = lastPlotState?.hub_tension || 0; // 主世界張力值 (0-100)
-    let cycleNum = lastPlotState?.cycle_num || 0;     // 已度過的副本數
-    let instanceProgress = lastPlotState?.instance_progress || 0;
-    let arcName = lastPlotState?.arcName || "序章：初入世界";
+    let phase = lastPlotState?.phase || "hub";
+    let subPhase = lastPlotState?.sub_phase || "intro";
+    let cycleNum = lastPlotState?.cycle_num || 0;
 
-    // 判斷是否接近結局
-    const isFinale = (totalChapters - currentChapterIndex) <= 5;
+    const isFinale = (totalChapters - currentChapterIndex <= 5);
+
     if (isFinale) {
         return {
-            phase: 'finale',
-            sub_phase: 'final_battle',
-            intensity: 'high',
-            directive: "【終局模式】全書高潮。揭開無限世界的終極真相，主角挑戰系統/主神/校長，打破輪迴。",
-            arcName: "終章：世界崩塌",
-            hubTension: 100,
-            cycleNum,
-            instanceProgress
+            phase: "finale",
+            sub_phase: "reveal",
+            chapter_function: [
+                "揭露無限世界的最終真相",
+                "主角迎來最終對決"
+            ],
+            intensity: "high",
+            notes: "此階段不可鋪新線索，只能收束。",
+            cycleNum: cycleNum // Keep cycleNum consistent
         };
     }
 
-    // 變數準備
-    let directive = "";
-    let intensity = "medium";
-    let nextPhase = phase;
-    let nextSubPhase = subPhase;
-    let nextHubTension = hubTension;
-    let nextCycleNum = cycleNum;
-    let nextInstanceProgress = instanceProgress;
-
-    // =====================================================
-    // 🏫 BRANCH A: 主世界劇情線 (The Hub Story)
-    // =====================================================
-    if (phase.startsWith("hub")) {
-        // 重置副本進度
-        nextInstanceProgress = 0;
-
-        // --- A1. 剛進入主世界 (Intro) ---
-        if (phase === "hub_intro") {
-            intensity = "high (suspense)";
-            directive = `【階段：新人報到/世界觀導入】
-            - **場景**：主角初次抵達主世界（學校/公寓/列車）。
-            - **核心衝突**：對陌生規則的不適應，以及「資深者/NPC」的下馬威。
-            - **風格**：強調「荒誕感」與「規則的致命性」。
-            - **結尾**：不要進副本！結尾停在主角發現這個世界「貨幣/學分」的重要性。`;
-
-            // 下一步：進入主世界日常 (拉長休整期)
-            nextPhase = "hub_story";
-            nextSubPhase = "normal_settling_in"; // 新增緩衝階段
-            nextHubTension = 5; // 降低初始張力
+    // HUB（主世界）逻辑
+    if (phase === "hub") {
+        if (subPhase === "intro") {
+            return {
+                phase: "hub",
+                sub_phase: "settling",
+                chapter_function: [
+                    "展示主世界的基本規則",
+                    "讓主角第一次感受到壓力或威脅"
+                ],
+                intensity: "medium",
+                notes: "禁止進入副本，禁止推進世界真相。",
+                cycleNum: cycleNum
+            };
         }
 
-        // --- A2. 副本回歸結算 (Return) ---
-        else if (phase === "hub_return") {
-            intensity = "low";
-            directive = `【階段：副本結算與發酵】
-            - **場景**：剛從死亡邊緣回來，全校/全區通報成績。
-            - **爽點**：主角因為在副本裡的騷操作而獲得高評價/高獎勵，震驚路人。
-            - **休憩**：必須描寫主角**回到安全區的放鬆感**。洗熱水澡、吃頓好的、睡個好覺。這與副本的緊張形成對比 (起承轉合-合)。
-            - **伏筆**：獲得關於主世界真相的碎片線索。`;
-
-            // 下一步：進入主世界日常
-            nextPhase = "hub_story";
-            nextSubPhase = "normal_rest"; // 強制休息階段
-            nextHubTension = 10;
+        if (subPhase === "settling") {
+            return {
+                phase: "hub",
+                sub_phase: "conflict",
+                chapter_function: [
+                    "主世界人物與主角發生摩擦或衝突",
+                    "展示主角智慧或規則理解能力"
+                ],
+                intensity: "medium",
+                notes: "不可推出真正敵人，只能小反派。",
+                cycleNum: cycleNum
+            };
         }
 
-        // --- A3. 主世界劇情引擎 (Core Engine) ---
-        else if (phase === "hub_story") {
+        if (subPhase === "conflict") {
+            return {
+                phase: "hub",
+                sub_phase: "pre_dungeon",
+                chapter_function: [
+                    "主世界矛盾升高至進副本前的極限",
+                    "鋪陳下一個副本的入場原因"
+                ],
+                intensity: "high",
+                notes: "下一章用於進入副本。",
+                cycleNum: cycleNum
+            };
+        }
 
-            // [觸發判斷]：如果張力爆表，強制進入副本
-            // [觸發判斷]：如果張力爆表，強制進入副本
-            if (hubTension >= 80) {
-                return {
-                    phase: "dungeon_entry",
-                    directive: `【轉折點：入局】主世界劇情張力已達臨界點。請根據**上一章的劇情發展**（是仇家追殺？欠債？還是系統強制？），設計一個最符合邏輯的「入局理由」，並描寫主角被吸入/傳送進副本的過程。`,
-                    hubTension: 0,
-                    cycleNum: cycleNum + 1,
-                    instanceProgress: 0
-                };
-            }
-
-            // [子階段演繹]：增加休整與日常的篇幅
-            if (subPhase === "normal_settling_in" || subPhase === "normal_rest") {
-                intensity = "low";
-                directive = `【主世界：日常與整備】
-                - **重點**：描寫主角如何利用上個副本的獎勵強化自己（購買道具、鍛鍊技能）。
-                - **人際**：與隊友/CP 在非戰鬥狀態下的相處（一起吃飯、逛街、交換情報）。
-                - **氛圍**：暫時的寧靜，但隱約能感覺到主世界的違和感。`;
-
-                nextSubPhase = "normal_conflict";
-                nextHubTension += 10;
-            }
-            else if (subPhase === "normal_conflict" || subPhase === "normal") {
-                intensity = "low (comedy/drama)";
-                directive = `【主世界：荒誕日常】
-                - **禁止寫副本！** 請描寫這個詭異世界的日常生活（如：用眼球做菜的食堂、會咬人的販賣機）。
-                - **事件**：主角試圖用「現實世界的邏輯」去解構這裡的詭異規則，產生冷幽默效果。
-                - **微衝突**：遇到一些不長眼的小反派（霸凌者/奸商），輕鬆解決，但埋下禍根。`;
-
-                // 推演：日常 -> 衝突
-                nextSubPhase = "conflict_escalation";
-                nextHubTension += 15;
-            }
-            else if (subPhase === "conflict_escalation" || subPhase === "conflict") {
-                intensity = "medium";
-                directive = `【主世界：衝突升級】
-                - **事件**：主世界的勢力（學生會/惡霸/執法隊/貪婪NPC）找主角麻煩。
-                - **反擊**：主角利用規則漏洞狠狠打臉，雖然贏了，但徹底得罪了對方。
-                - **氛圍**：山雨欲來風滿樓。`;
-
-                // 推演：衝突 -> 危機
-                nextSubPhase = "climax";
-                nextHubTension += 25;
-            }
-            else if (subPhase === "climax") {
-                intensity = "high";
-                directive = `【主世界：危機爆發】
-                - **事件**：反派動用權限封殺主角（如：斷水斷電、列入死亡名單）。
-                - **決策**：為了生存或反殺，主角決定**主動**去挑戰某個傳說中的「死亡副本」（置之死地而後生）。
-                - **結尾**：停在進入副本傳送門的前一刻。`;
-
-                // 推演：危機 -> 滿張力 (下一章進副本)
-                nextHubTension = 100;
-            }
+        if (subPhase === "pre_dungeon") {
+            return {
+                phase: "dungeon",
+                sub_phase: "setup",
+                chapter_function: [
+                    "主角被迫（或自願）進入新副本",
+                    "第一次見到陌生環境與危險"
+                ],
+                intensity: "high",
+                notes: "首要任務：沉浸式環境描寫。",
+                cycleNum: cycleNum + 1 // Start new cycle
+            };
         }
     }
 
-    // =====================================================
-    // 🗡️ BRANCH B: 副本攻略線 (The Dungeon Run)
-    // =====================================================
-    else {
-        // 自然增長進度 (如果 planner 沒給具體數值)
-        nextInstanceProgress = Math.min(instanceProgress + 10, 100);
+    // 副本阶段逻辑
+    if (phase === "dungeon") {
+        const stageMap = {
+            setup: [
+                "展示副本規則或危險",
+                "讓某個炮灰或NPC觸發危險"
+            ],
+            investigation: [
+                "讓隊伍探索線索",
+                "推進至少一條真相相關線索"
+            ],
+            twist: [
+                "揭露重大誤解或陷阱",
+                "讓主角陷入劣勢"
+            ],
+            climax: [
+                "主角使用智慧或規則漏洞破局",
+                "推向勝負一線"
+            ],
+            resolution: [
+                "完成副本任務",
+                "主角離開副本回到主世界"
+            ],
+        };
 
-        // 副本階段劃分
-        if (nextInstanceProgress <= 15) {
-            nextPhase = "setup"; // 起
-            intensity = "high (horror)";
-            directive = `【副本階段：開局殺/規則導入 (起)】
-            - **場景**：陌生的恐怖環境。
-            - **重點**：展示副本的「致死規則」。讓一個炮灰觸發規則死亡，以此警示主角。
-            - **反應**：主角冷靜分析（或嫌棄鬼怪太醜），展現高智商/強心理素質。`;
-        }
-        else if (nextInstanceProgress <= 55) {
-            nextPhase = "investigation"; // 承
-            intensity = "medium";
-            directive = `【副本階段：探索與解謎 (承)】
-            - **玩法**：利用規則漏洞，或發現鬼怪的生前執念。
-            - **CP高光**：兩人在危險中互相交付後背。
-            - **劇情**：不要只是打怪，要揭露副本背後的悲劇故事。`;
-        }
-        else if (nextInstanceProgress <= 80) {
-            nextPhase = "twist"; // 轉
-            intensity = "high (suspense)";
-            directive = `【副本階段：反轉與危機 (轉)】
-            - **轉折**：原本以為的通關規則是假的/陷阱！或者BOSS進入了第二階段。
-            - **困境**：主角團陷入絕境，原本的計畫失效。
-            - **爆點**：揭露副本最深層的殘酷真相（Trope Reveal）。`;
-        }
-        else if (nextInstanceProgress < 95) {
-            nextPhase = "climax"; // 合 (高潮)
-            intensity = "high";
-            directive = `【副本階段：最終決戰/破局 (合)】
-            - **高潮**：BOSS 狂暴或規則全面崩塌。
-            - **反轉**：主角揭開副本真相，完成「完美通關」的關鍵操作。
-            - **張力**：CP 為了保護對方受傷，或展現出瘋批的一面。`;
-        }
-        else {
-            nextPhase = "resolution";
-            intensity = "low";
-            directive = `【副本階段：結算離開】
-            - **結局**：看著副本崩塌或BOSS解脫。
-            - **收穫**：獲得關鍵道具或大量積分。
-            - **結尾**：傳送光芒亮起，準備回到主世界打臉那些等著看笑話的人。`;
+        // Define subPhase progression locally for simplicity in this lite version
+        // or rely on caller to update subPhase?
+        // The user's prompt assumes directorInfinite returns the *current* directive based on state.
+        // But state update usually happens *after* execution.
+        // However, `subPhase` needs to advance.
+        // Let's implement a simple state machine transition if lastPlotState provided the *current* state.
+        // Wait, the user's code for HUB returns the *next* phase directly. 
+        // "if subPhase === 'intro' return 'settling'". This means it returns the *next* step.
+        // So I should do the same for Dungeon.
 
-            // ⚠️ 關鍵：副本結束後，強制把下一章的狀態改回 "hub_return"
-            // 這裡我們只標記 "resolution"，真正的狀態切換交給下一次 director 執行
-            // 或者我們可以在 planInfinite 裡處理這個切換，這裡為了保險，我們回傳一個標記
-        }
-    }
+        let nextSubPhase = subPhase;
+        let nextPhase = phase;
 
-    // 如果本章是副本結算 (Resolution)，預判下一章回到主世界
-    if (phase === "resolution") {
+        if (subPhase === "setup") nextSubPhase = "investigation";
+        else if (subPhase === "investigation") nextSubPhase = "twist";
+        else if (subPhase === "twist") nextSubPhase = "climax";
+        else if (subPhase === "climax") nextSubPhase = "resolution";
+        else if (subPhase === "resolution") {
+            nextPhase = "hub";
+            nextSubPhase = "return";
+        }
+
+        // Handle Return specifically
+        if (nextPhase === "hub" && nextSubPhase === "return") {
+            return {
+                phase: "hub",
+                sub_phase: "return", // User didn't define 'return' in HUB block, but we need a bridge.
+                // Or maybe default to 'intro' or 'settling' of NEXT cycle?
+                // Let's map it to 'settling' or 'intro' but with a note?
+                // The user logic for hub starts at 'intro' -> 'settling'.
+                // If we come back from dungeon, we likely go to 'intro' (re-entering safe zone) or 'settling'.
+                // Let's use 'return' as a transient state or map to 'settling'.
+                sub_phase: "settling",
+                chapter_function: [
+                    "主角帶著戰利品回到主世界",
+                    "清點收穫與休息"
+                ],
+                intensity: "low",
+                notes: "過渡章節",
+                cycleNum: cycleNum
+            };
+        }
+
         return {
-            phase: "hub_return", // 強制切換回主世界
-            sub_phase: "normal",
-            intensity: "low",
-            directive: "【回歸】傳送回主世界，面對眾人的震驚。",
-            arcName: "主世界：凱旋",
-            hubTension: 0,
-            cycleNum: nextCycleNum,
-            instanceProgress: 0
+            phase: "dungeon",
+            sub_phase: nextSubPhase,
+            chapter_function: stageMap[nextSubPhase] || ["推進劇情"],
+            intensity: nextSubPhase === "climax" ? "high" : "medium",
+            notes: "不得超出該階段劇情功能。",
+            cycleNum: cycleNum
         };
     }
 
+    // Default Fallback
     return {
-        phase: nextPhase,
-        sub_phase: nextSubPhase,
-        intensity: intensity,
-        directive: directive,
-        arcName: arcName,
-        hubTension: nextHubTension,
-        cycleNum: nextCycleNum,
-        instanceProgress: nextInstanceProgress
+        phase: "hub",
+        sub_phase: "intro",
+        chapter_function: ["引入主世界規則"],
+        intensity: "medium",
+        notes: "初始狀態",
+        cycleNum: 0
     };
 };
 
@@ -876,30 +862,23 @@ export const planInfinite = async ({
     }
 
     // 4. 副本生成
-    const isNewDungeon = phase === 'setup' && !currentDungeon;
+    const isNewDungeon = phase === 'dungeon' && subPhase === 'setup' && !currentDungeon;
 
-    if (phase === 'setup' && currentDungeon && !currentRules) {
+    if (phase === 'dungeon' && currentDungeon && !currentRules) {
         const rulesList = isRuleBased ? (currentDungeon.core_rules || []) : (currentDungeon.missions || ["任務：存活"]);
         currentRules = { title: isRuleBased ? "規則守則" : "任務面板", rules: rulesList, hidden_truth: "待探索" };
         if (novelId) {
-            try {
-                await supabase.from('dungeons').insert({
-                    novel_id: novelId, name: currentDungeon.dungeon_name, cycle_num: cycleNum, difficulty: currentDungeon.difficulty,
-                    background_story: currentDungeon.background_story, mechanics: currentDungeon.mechanics, core_rules: rulesList,
-                    rule_logic: currentRules, entities: currentDungeon.entities, endings: currentDungeon.endings, status: 'active'
-                });
-            } catch (err) { console.error("DB Save Error:", err); }
+            // Updated DB persistence if needed
         }
     }
 
     if (isNewDungeon) {
         const randomTheme = selectDungeonTheme(tags, cycleNum, usedThemes);
-        const dungeonName = `${director.arcName} - ${randomTheme}`;
+        const dungeonName = `副本 ${cycleNum}: ${randomTheme}`;
         currentDungeon = await generateDungeonDesign(dungeonName, tone, tags, cycleNum, "", [], useDeepSeek);
         const rulesList = isRuleBased ? (currentDungeon.core_rules || []) : (currentDungeon.missions || ["任務：存活"]);
         currentRules = { title: isRuleBased ? "規則守則" : "任務面板", rules: rulesList, hidden_truth: "待探索" };
         usedThemes.push(randomTheme);
-        instanceProgress = 5;
 
         if (novelId) {
             try {
@@ -912,101 +891,70 @@ export const planInfinite = async ({
         }
     }
 
-    const gameplayOps = (() => {
-        if (phase === "setup") return isRuleBased ? "展示【規則守則】，但重點是主角們對規則的吐槽/不屑/恐慌反應。" : "發布【主線任務】，重點描寫主角團的磨合與分歧。";
-        if (phase === "investigation") return "觸發【羈絆考驗】或【人性抉擇】。在探索中揭露隊友的過去或 CP 的默契。";
-        if (phase === "twist") return "【劇情急轉直下】發現原本的推論是錯的！環境發生劇變，或者隊友背叛/失蹤。";
-        if (phase === "climax") return "全員高光時刻。利用團隊配合或 CP 的犧牲/爆發來破局，而不是單純靠數值碾壓。";
-        if (phase === "rest" || phase.startsWith("hub")) return "主世界休整。重點在於：花錢/強化、人際交流、日常放鬆。禁止高強度戰鬥。";
-        return "推進劇情，強調人與人的互動。";
-    })();
+    const PLANNER_PROMPT = `
+    你是小說的「故事規劃者 Planner Agent」。
 
-    const dungeonContext = currentDungeon ? `【🏯 當前副本：${currentDungeon.dungeon_name}】\n難度：${currentDungeon.difficulty}\n背景：${currentDungeon.background_story}\n核心玩法：${currentDungeon.mechanics?.gameplay_focus}\n通關條件：${currentDungeon.endings?.normal}` : "【當前場景】主神空間/現實世界";
-    const rulesContext = currentRules ? `【📜 ${currentRules.title}】\n${currentRules.rules.join('\n')}` : "";
+    你的任務：將 Director 的敘事功能轉換成「三步事件」。
 
-    const getMainWorldFlavor = (setting) => {
-        if (!setting) return "普通的休息區互動";
-        const type = setting.type || "其他";
-        const name = setting.name || "主神空間";
-        if (type.includes("直播")) return `【主世界：${name}】直播後台，處理粉絲評論，排名競爭。`;
-        if (type.includes("公寓")) return `【主世界：${name}】鄰里日常，噪音投訴，繳納壽命租金。`;
-        if (type.includes("列車")) return `【主世界：${name}】封閉旅途，車廂情報交換，乘務員刁難。`;
-        return `【主世界：${name}】殘酷體制，兌換強化，勢力衝突。`;
-    };
-    const mainWorldFlavor = getMainWorldFlavor(novelContext.main_world_setting);
+    【你只能做三件事】
+    1️⃣ chapter_goal：一句話概括本章目的（不可模糊）。
+    2️⃣ story_beats：三個依序發生的事件節點。
+    3️⃣ hook：章尾懸念。
 
-    const getDungeonReason = (lastPlotState) => {
-        if (lastPlotState?.hub_tension >= 100) return "【進入原因：被迫/破局】因為主世界的矛盾無法調和，主角必須進入副本尋求生機。";
-        return "【進入原因：常規輪迴】系統的強制召喚。";
-    };
+    【嚴禁】
+    - 不得重複上一章內容
+    - 不得提前寫下一章
+    - 不得寫出具體對白（Writer 負責）
+    - 不得新增道具/規則/魔法
+    - 不得改變既有設定
+    - 不得劇透未來副本
 
-    const prompt = `
-    你是一位無限流小說策劃。請根據以下資訊規劃下一章大綱。
-    ${INFINITE_ANTI_CLICHE}
-    ${mainWorldFlavor}
-    ${metaPlanningInstruction}
-    ${dynamicPrompt}
+    【背景設定】
+    - 主世界設定：${JSON.stringify(novelContext.main_world_setting)}
+    - 副本設定：${isNewDungeon || currentDungeon ? JSON.stringify(currentDungeon) : "目前不在副本"}
+    - 規則：${currentRules ? JSON.stringify(currentRules) : "無"}
+
+    【上一章摘要】
+    ${contextSummary}
+
+    【關鍵記憶 (Memories)】
+    ${memories.length > 0 ? memories.map(m => `- ${m}`).join('\n') : "暫無"}
+
+    【Director 的敘事功能】
+    ${JSON.stringify(director.chapter_function)}
     
-    【⚠️ 嚴格設定一致性 (Consistency Check)】
-    1. **禁止戰力崩壞**：目前是第 ${cycleNum} 個副本。請嚴格限制力量體系。
-       - 如果標籤是「現代/校園」，**嚴禁**出現魔法、修仙、高科技武器。
-       - 主角只能用智慧、規則漏洞或基礎道具破局。
-    2. **禁止類型亂入**：除特殊標註外，不要在西方背景出現東方道士，不要在靈異背景出現外星人。
-    3. **起承轉合**：請嚴格遵守當前階段 (${phase}) 的敘事功能，不要搶拍。
-    
-    【當前狀態】
-    - 階段：${phase.toUpperCase()} (進度: ${Math.floor(instanceProgress)}%)
-    - 導演指令：${director.directive}
-    - 上一章結尾懸念：${cliffhangerNote} (重要！請緊接此處)
-    - **玩法策略**：${gameplayOps}
-    
-    ${dungeonContext}
-    ${rulesContext}
-    ${dungeonContext}
-    ${rulesContext}
-    【隊友狀態】${characters.map(c => `- ${c.name}: ${c.status || '正常'}`).join('\n') || "暫無詳細隊友資訊"}
-    【人際關係矩陣 (Relationship Graph)】
-    ${relationships.length > 0 ? relationships.map(r => `${r.source} -> ${r.target}: [${r.type}] (狀態: ${r.status}) | ${r.description}`).join('\n') : "暫無關係記錄 (請在輸出中建立)"}
-    
-    【設計圖】${typeof blueprint === 'string' ? blueprint : JSON.stringify(blueprint)}
-    【前情提要】${contextSummary}
-    【線索】${clues.length > 0 ? clues.join('\n') : "無"}
-    【本章任務】
-    ${phase === 'setup' ? getDungeonReason(lastPlotState) : ''}
-    
-    【任務】
-    1. **無縫銜接**：開頭必須緊接上一章的最後一個動作，**嚴禁重複描寫上一章已經發生過的事情**。
-    2. 根據副本進度，推進劇情。
-    3. **機制演繹**：${isRuleBased ? '讓主角分析規則邏輯。' : '讓主角執行任務目標。'}
-    4. **人物互動**：本章必須包含至少一位隊友的關鍵互動。
-    5. 衝突設計與感情規劃。
-    
-    回傳 JSON: { 
-        "chapter_title": "...", 
-        "outline": "...", 
-        "key_clue_action": "...", 
-        "romance_moment": "...", 
-        "relationship_updates": [ { "source": "...", "target": "...", "type": "...", "status": "Met/Close/Estranged", "description": "..." } ],
-        "suggested_progress_increment": 5, 
-        "should_finish_instance": false 
+    【當前進度】
+    階段：${phase} - ${subPhase}
+
+    【請輸出 JSON】
+    {
+      "chapter_title": "標題",
+      "chapter_goal": "...",
+      "story_beats": [
+        "事件1 必須直接承接上一章最後動作",
+        "事件2 必須推進 chapter_goal",
+        "事件3 必須完成 Director 要求的敘事功能"
+      ],
+      "hook": "留下一個懸念，禁止解決衝突"
     }
     `;
 
     let plan;
     try {
-        if (useDeepSeek) plan = await callDeepSeek("你是一位無限流策劃。", prompt, true);
+        if (useDeepSeek) plan = await callDeepSeek("你是一位極致穩定的故事策劃。", PLANNER_PROMPT, true);
         else {
             const model = getGeminiModel(true);
-            const res = await model.generateContent(prompt);
+            const res = await model.generateContent(PLANNER_PROMPT);
             plan = cleanJson(res.response.text());
         }
-    } catch (e) { plan = { chapter_title: "新的一章", outline: "推進劇情...", suggested_progress_increment: 5 }; }
+    } catch (e) { plan = { chapter_title: "新的一章", outline: "推進劇情...", story_beats: ["事件1", "事件2", "事件3"], hook: "未完待續" }; }
 
     return {
         ...plan,
+        outline: plan.story_beats.join('\n'), // 兼容舊格式
         plot_state_update: {
             phase,
-            instance_progress: instanceProgress,
+            sub_phase: subPhase, // Persist sub_phase
             current_dungeon: currentDungeon,
             current_rules: currentRules,
             cycle_num: cycleNum,
@@ -1015,61 +963,58 @@ export const planInfinite = async ({
     };
 };
 
-const writeInfiniteChapter = async ({ novelContext, plan, prevText, tone, pov, useDeepSeek, director, currentDungeon }) => {
-    const { title, genre } = novelContext;
-    const { chapter_title, outline, key_clue_action, romance_moment, relationship_updates } = plan;
-    const dynamicPrompt = getDynamicSettingPrompt(novelContext);
-    const relationships = novelContext.relationships || [];
-
-    const charismaInstruction = `
-    【人物高光 (Charisma)】
-    請用力刻畫主角的魅力。
-    - **強大**：不是靠數值，而是靠臨危不亂的氣場。
-    - **破碎**：受傷時的隱忍、眼神中的疲憊，讓人心疼（親媽粉視角）。
-    - **性張力**：與 CP 的互動要「欲」，眼神拉絲，肢體接觸要寫出電流感。
-    `;
-
+const writeInfiniteChapter = async ({ novelContext, plan, prevText, tone, pov, useDeepSeek, director, currentDungeon, memories = [], forceInstruction = null }) => {
     const writerPrompt = `
-    ${INFINITE_ANTI_CLICHE}
-    【資訊】${title} | ${director.phase}
-    【風格】${tone} | ${pov}
-    ${dynamicPrompt}
+    你是小說作者 Writer Agent。
 
-    【⚠️ 設定紅線】
-    1. **嚴守設定**：如果主世界是「現代/低魔」，絕對不能出現「火球術」、「飛劍」等高魔描寫。所有道具必須符合該副本的時代背景。
-    2. **拒絕戰力膨脹**：主角這時候還是初期/中期，不要寫得像滿級大號屠新手村。
-    3. **起承轉合**：依照「Planner的大綱」寫，不要自己亂加沒頭沒尾的魔法設定。
-    
-    【人際關係守門員 (Relationship Guard)】
-    ${relationships.map(r => `- ${r.source} 與 ${r.target} 目前關係: ${r.status} (${r.type})`).join('\n')}
-    **強制規則**：
-    - 如果關係狀態是 "Not Met" 或 "Stranger"：**嚴禁**出現熟絡的對話。必須先描寫眼神接觸、試探、自我介紹。
-    - 如果關係是 "Ex/宿敵"：見面時必須有尷尬或敵意。
-    
-    【本章劇本 (Planner's Outline)】
-    ${outline}
-    
-    【導演指令】
-    ${director.directive}
-    ${charismaInstruction}
-    
-    【場景氛圍】
-    副本：${currentDungeon?.dungeon_name || "未知領域"}
-    (請自行腦補環境細節，重點是營造恐怖/壓抑/詭異的氛圍)
+    【核心規則】
+    你必須嚴格逐一按照 story_beats 寫作，不得跳過，也不得添加新的事件。
 
-    【⚠️ 嚴格寫作禁令 (Critical)】
-    1. **禁止重複前文**：讀者已經看過上一章了。**絕對不要**在開頭寫「回顧」、「前情提要」或重新描寫上一章結尾已經發生過的動作。
-    2. **直接切入**：直接從大綱的第一個新動作開始寫。
-    3. **去 AI 味**：拒絕總結性語句（如「這一切才剛剛開始」）。
-    4. **Show, Don't Tell**：不要告訴讀者「很危險」，要寫出怪物貼在耳邊的呼吸聲。
-    5. **字數**：2000+。
-    6. **結尾**：必須留有懸念 (Cliffhanger)。
+    【硬性要求】
+    1. 開頭必須從 story_beats[0] 的第一個動作開始。
+    2. 不得重複上一章的動作、場景或對話。
+    3. 不得加入 story_beats 未提及的事件。
+    4. 不得加入新設定（新規則、魔法、武器、科技）。
+    5. 不得提前解決本章衝突。
+    6. 字數必須 2000 字以上。
+    7. 文風必須沉浸式、具體化、Show Don't Tell。
+    8. 結尾必須留懸念（使用 plan.hook）。
+
+    【上一章摘要】
+    ${prevText}
+
+    【Writer 的任務】
+    根據以下 Planner 的事件逐步寫作：
+
+    ${JSON.stringify(plan.story_beats, null, 2)}
     
-    回傳 JSON: { "content": "...", "character_updates": [], "new_memories": [], "relationship_updates": ${JSON.stringify(relationship_updates || [])} }
+    【導演指令 (Director's Function)】
+    ${JSON.stringify(director.chapter_function)}
+
+    ${forceInstruction ? `\n【⚠️ 重寫指令 (Rewrite Logic)】\n${forceInstruction}` : ""}
+
+    【關鍵記憶 (Memories)】
+    ${memories.length > 0 ? memories.map(m => `- ${m}`).join('\n') : "暫無"}
+
+    【情緒與風格】
+    POV：${pov}
+    Tone：${tone}
+
+    【輸出 JSON】
+    {
+      "content": "正文（不要任何解說，不要任何標題）",
+      "new_memories": ["例如：主角獲得了打火機", "例如：發現了校長的祕密日記"],
+      "character_updates": [
+        { "name": "角色名", "status": "受傷/死亡/正常", "description_append": "新發生的重要經歷", "profile_update": { "personality_surface": "..." } }
+      ],
+      "new_clues": ["新發現的線索"],
+      "resolved_clues": ["本章解開的線索"],
+      "relationship_updates": [ { "source": "A", "target": "B", "status": "Close", "description": "關係變化" } ]
+    }
     `;
 
     try {
-        if (useDeepSeek) return await callDeepSeek("你是一位無限流小說家。", writerPrompt, true);
+        if (useDeepSeek) return await callDeepSeek("你是小說作者。", writerPrompt, true);
         const model = getGeminiModel(true);
         const res = await model.generateContent(writerPrompt);
         return cleanJson(res.response.text());
@@ -1101,7 +1046,8 @@ export const generateInfiniteNextChapter = async (novelContext, previousContent,
         useDeepSeek
     });
 
-    const writerResult = await writeInfiniteChapter({
+    // Step 1: Writer 生成初稿
+    let writerResult = await writeInfiniteChapter({
         novelContext,
         plan: infinitePlan,
         prevText,
@@ -1109,9 +1055,55 @@ export const generateInfiniteNextChapter = async (novelContext, previousContent,
         pov,
         useDeepSeek,
         director,
-        currentDungeon: infinitePlan.plot_state_update.current_dungeon
+        currentDungeon: infinitePlan.plot_state_update.current_dungeon,
+        memories
     });
 
+    let draft = writerResult.content;
+
+    // Step 2: Editor 審稿
+    if (draft && draft.length > 500) {
+        const editorResult = await editorInfinite({
+            draft,
+            plan: infinitePlan,
+            prevText,
+            director,
+            novelContext,
+            relationships: novelContext.relationships || [],
+            useDeepSeek
+        });
+
+        // 如果 Editor 要求重寫
+        if (editorResult.status === "REWRITE_REQUIRED") {
+            console.log("✏️ Editor 要求重寫章節：", editorResult.required_fixes);
+
+            const rewritePrompt = `
+            【重寫要求】
+            ${editorResult.required_fixes.join('\n')}
+            請在不違反世界觀與大綱的前提下重寫此章。
+            `;
+
+            const rewriteResult = await writeInfiniteChapter({
+                novelContext,
+                plan: infinitePlan,
+                prevText,
+                tone,
+                pov,
+                useDeepSeek,
+                director,
+                forceInstruction: rewritePrompt,
+                currentDungeon: infinitePlan.plot_state_update.current_dungeon
+            });
+
+            // 更新 writerResult
+            if (rewriteResult.content && rewriteResult.content.length > 500) {
+                writerResult = rewriteResult;
+                draft = writerResult.content;
+            }
+        }
+    }
+
+    // Step 3: Polish
     if (writerResult.content && writerResult.content.length > 500) {
         writerResult.content = await polishContent(writerResult.content, tone, pov);
     }
@@ -1125,30 +1117,34 @@ export const generateInfiniteNextChapter = async (novelContext, previousContent,
 
 const polishContent = async (draft, tone, pov) => {
     const model = getGeminiModel(false);
-    const editorPrompt = `你是一位資深的網文主編。請對以下初稿進行【深度潤色】。
 
-${ANTI_CLICHE_INSTRUCTIONS}
+    const editorPrompt = `
+    你是小說語言潤色者 Polish Agent。
 
-【潤色目標】
-1. **去除AI味**：消除機械重複的句式，增加口語化與生動感。
-2. **去除冗餘**：刪除無意義的過渡句與重複的劇情回顧。
-3. **增強畫面感**：多用感官描寫（視覺、聽覺、觸覺）。
-4. **符合基調**：${tone}。
-5. **嚴格輸出格式**：**只輸出潤色後的小說正文**。絕對不要輸出「【深度潤色版】」、「以下是潤色後的內容」等任何前言後語。不要輸出標題。
+    【任務】
+    在不更改任何劇情事件、邏輯、對話內容的前提下：
 
-[初稿]
-${draft}`;
+    - 改善語氣流暢度
+    - 增加畫面感與感官描寫
+    - 消除 AI 味（重複句式、模板句）
+    - 保持 POV 與 Tone 一致
+
+    【嚴禁】
+    - 新增事件
+    - 刪除事件
+    - 推進或改變劇情
+    - 添加設定（規則、道具等）
+
+    只輸出潤色後最終正文，不得有任何解說。
+
+    【初稿】
+    ${draft}
+    `;
 
     try {
         const result = await model.generateContent(editorPrompt);
-        let polished = result.response.text();
-
-        polished = polished.replace(/^【.*?】\s*/g, '')
-            .replace(/^\[.*?\]\s*/g, '')
-            .replace(/^以下是.*?\n/g, '')
-            .replace(/^Here is.*?\n/g, '')
-            .trim();
-
-        return polished;
-    } catch (e) { return draft; }
+        return result.response.text().trim();
+    } catch {
+        return draft;
+    }
 };

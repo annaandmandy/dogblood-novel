@@ -8,6 +8,7 @@ import Reader from './pages/Reader';
 import NovelDetail from './pages/NovelDetail';
 import Auth from './pages/Auth';
 import Profile from './pages/Profile';
+import Interactive from './pages/Interactive';
 
 function App() {
   return (
@@ -17,6 +18,7 @@ function App() {
           <Route index element={<Home />} />
           <Route path="square" element={<Square />} />
           <Route path="create" element={<Create />} />
+          <Route path="interactive" element={<Interactive />} />
           <Route path="novel/:id" element={<NovelDetail />} />
           <Route path="profile" element={<Profile />} />
         </Route>

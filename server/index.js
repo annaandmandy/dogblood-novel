@@ -2,8 +2,10 @@ console.log("Starting server initialization...");
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import { getGeminiModel, cleanJson, callDeepSeek, ANTI_CLICHE_INSTRUCTIONS } from './lib/llm.js';
+import { getGeminiModel, cleanJson, callDeepSeek, ANTI_CLICHE_INSTRUCTIONS, polishContent } from './lib/llm.js';
 import { generateInfiniteNextChapter, generateInfiniteSettings, generateInfiniteStart, ensureInfiniteSettings } from './agents/infinite/planInfinite.js';
+import { editorGeneral } from './agents/editor.js';
+import { generateInteractiveSettings, generateInteractiveStart, generateInteractiveNext } from './agents/interactive/game.js';
 
 dotenv.config();
 
@@ -233,36 +235,7 @@ const planChapter = async (director, blueprint, contextSummary, memories = [], c
     }
 };
 
-const polishContent = async (draft, tone, pov) => {
-    const model = getGeminiModel(false);
-    const editorPrompt = `你是一位資深的網文主編。請對以下初稿進行【深度潤色】。
 
-${ANTI_CLICHE_INSTRUCTIONS}
-
-【潤色目標】
-1. **去除AI味**：消除機械重複的句式，增加口語化與生動感。
-2. **去除冗餘**：刪除無意義的過渡句與重複的劇情回顧。
-3. **增強畫面感**：多用感官描寫（視覺、聽覺、觸覺）。
-4. **符合基調**：${tone}。
-5. **嚴格輸出格式**：**只輸出潤色後的小說正文**。絕對不要輸出「【深度潤色版】」、「以下是潤色後的內容」等任何前言後語。不要輸出標題。
-
-[初稿]
-${draft}`;
-
-    try {
-        const result = await model.generateContent(editorPrompt);
-        let polished = result.response.text();
-
-        // Post-processing to remove common AI prefixes
-        polished = polished.replace(/^【.*?】\s*/g, '')
-            .replace(/^\[.*?\]\s*/g, '')
-            .replace(/^以下是.*?\n/g, '')
-            .replace(/^Here is.*?\n/g, '')
-            .trim();
-
-        return polished;
-    } catch (e) { return draft; }
-};
 
 export const generateRandomSettings = async (genre, tags = [], tone = "一般", targetChapterCount = null, category = "BG") => {
     const model = getGeminiModel(true);
@@ -334,6 +307,10 @@ export const generateRandomSettings = async (genre, tags = [], tone = "一般", 
         };
     }
 };
+
+
+
+
 
 export const generateNovelStart = async (genre, settings, tags = [], tone = "一般", pov = "女主") => {
     const model = getGeminiModel(true);
@@ -579,8 +556,58 @@ export const generateNextChapter = async (novelContext, previousContent, charact
         const result = await geminiModel.generateContent(geminiUserPrompt);
         const jsonResponse = cleanJson(result.response.text());
 
-        if (jsonResponse.content && jsonResponse.content.length > 500) {
-            const polishedContent = await polishContent(jsonResponse.content, tone, pov);
+        let draft = jsonResponse.content;
+
+        // Step 2: Editor Loop
+        if (draft && draft.length > 500) {
+            const editorResult = await editorGeneral({
+                draft,
+                plan: chapterPlan,
+                prevText,
+                director,
+                novelContext,
+                relationships: novelContext.relationships || [],
+                useDeepSeek
+            });
+
+            if (editorResult.status === "REWRITE_REQUIRED") {
+                console.log("✏️ Editor 要求重寫 (General):", editorResult.required_fixes);
+
+                const rewriteInstruction = `
+                【重寫要求】
+                ${editorResult.required_fixes.join('\n')}
+                請在不違反世界觀與大綱的前提下重寫此章。
+                `;
+
+                // Re-run with rewrite instruction
+                try {
+                    const rewritePrompt = geminiUserPrompt + "\n" + rewriteInstruction;
+                    if (isGeminiBlockedError({ message: "" })) { // Dummy check to trigger fallback if needed, or just standard logic
+                        // Re-use logic for rewrite
+                        const resultRewrite = await geminiModel.generateContent(rewritePrompt);
+                        const cleanRewrite = cleanJson(resultRewrite.response.text());
+                        if (cleanRewrite.content && cleanRewrite.content.length > 500) {
+                            jsonResponse.content = cleanRewrite.content;
+                            jsonResponse.plot_state = cleanRewrite.plot_state || jsonResponse.plot_state;
+                            draft = jsonResponse.content;
+                        }
+                    } else {
+                        const resultRewrite = await geminiModel.generateContent(rewritePrompt);
+                        const cleanRewrite = cleanJson(resultRewrite.response.text());
+                        if (cleanRewrite.content && cleanRewrite.content.length > 500) {
+                            jsonResponse.content = cleanRewrite.content;
+                            jsonResponse.plot_state = cleanRewrite.plot_state || jsonResponse.plot_state;
+                            draft = jsonResponse.content;
+                        }
+                    }
+                } catch (rewriteErr) {
+                    console.warn("Rewrite failed, using original draft.");
+                }
+            }
+        }
+
+        if (draft && draft.length > 500) {
+            const polishedContent = await polishContent(draft, tone, pov);
             jsonResponse.content = polishedContent;
         }
 
@@ -811,6 +838,37 @@ app.post('/api/translate', async (req, res) => {
     } catch (error) {
         console.error("Translation error:", error);
         res.status(500).json({ error: "Translation failed" });
+    }
+});
+
+
+app.post('/api/interactive/settings', async (req, res) => {
+    try {
+        const { tags, tone, category, useDeepSeek } = req.body;
+        const result = await generateInteractiveSettings(tags, tone, category, useDeepSeek);
+        res.json(result);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.post('/api/interactive/start', async (req, res) => {
+    try {
+        const { settings, tags, tone, useDeepSeek } = req.body;
+        const result = await generateInteractiveStart(settings, tags, tone, useDeepSeek);
+        res.json(result);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.post('/api/interactive/next', async (req, res) => {
+    try {
+        const { novelContext, previousContent, userChoice, lastPlotState, tone, useDeepSeek } = req.body;
+        const result = await generateInteractiveNext(novelContext, previousContent, userChoice, lastPlotState, tone, useDeepSeek);
+        res.json(result);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
     }
 });
 
