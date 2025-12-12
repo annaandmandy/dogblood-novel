@@ -2,7 +2,14 @@ import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from "@google/ge
 import dotenv from 'dotenv';
 import fetch from 'node-fetch';
 
-dotenv.config();
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Explicitly load .env from the server root (one level up from lib/)
+dotenv.config({ path: path.join(__dirname, '../.env') });
 
 const GEMINI_KEY = process.env.GEMINI_API_KEY;
 const OPENROUTER_KEY = process.env.OPENROUTER_API_KEY;

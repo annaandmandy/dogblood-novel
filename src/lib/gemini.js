@@ -31,8 +31,23 @@ export const generateNovelStart = async (genre, settings, tags = [], tone = "一
     return callApi('generate-start', { genre, settings, tags, tone, pov, useDeepSeek });
 };
 
-export const generateNextChapter = async (novelContext, prevText, characters = [], memories = [], clues = [], tags = [], tone = "一般", pov = "女主", lastPlotState = null, useDeepSeek = false) => {
-    return callApi('generate-chapter', { novelContext, prevText, characters, memories, clues, tags, tone, pov, lastPlotState, useDeepSeek });
+export const generateNextChapter = async (novelContext, prevText, characters = [], memories = [], clues = [], tags = [], tone = "一般", pov = "女主", lastPlotState = null, useDeepSeek = false, thread_id = "default_thread") => {
+    // Construct the state object expected by the graph
+    const initialState = {
+        novelContext: novelContext,
+        prevText: prevText,
+        characters: characters,
+        memories: memories,
+        clues: clues,
+        tags: tags,
+        tone: tone,
+        pov: pov,
+        plotState: lastPlotState || {},
+        useDeepSeek: useDeepSeek,
+        thread_id: thread_id
+    };
+
+    return callApi('generate-chapter-graph', initialState);
 };
 
 export const refineCharacterProfile = async (charInfo, novelContext, useDeepSeek = false) => {

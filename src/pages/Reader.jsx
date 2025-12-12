@@ -342,8 +342,9 @@ export default function Reader() {
             let lastChapter = chapters[chapters.length - 1];
             console.log(`Prefetching chapter ${lastChapter.chapter_index + 1}...`);
 
-            // 1. Call AI (Get JSON)
-            const aiResponse = await generateNextChapter(
+            // 1. Call AI (Get JSON) - Now using Graph Engine
+            console.log("Using LangGraph Engine...");
+            const graphResponse = await generateNextChapter(
                 {
                     ...novel.settings,
                     id: novel.id,
@@ -355,13 +356,26 @@ export default function Reader() {
                 lastChapter.content,
                 characters,
                 memories,
-                novel.settings?.clues || [], // clues (Arg 5)
-                novel.tags || [],            // tags (Arg 6)
-                novel.settings?.tone,        // tone (Arg 7)
-                novel.settings?.pov,         // pov (Arg 8)
-                novel.settings?.plot_state,  // lastPlotState (Arg 9)
-                useDeepSeek                  // useDeepSeek (Arg 10)
+                novel.settings?.clues || [],
+                novel.tags || [],
+                novel.settings?.tone,
+                novel.settings?.pov,
+                novel.settings?.plot_state,
+                useDeepSeek
             );
+
+            // Adapter: Map Graph State to Legacy Response Format
+            // The new generateNextChapter returns the graph state directly.
+            const aiResponse = {
+                content: graphResponse.draft,
+                chapter_plan: graphResponse.chapterPlan,
+                plot_state: graphResponse.plotState,
+                new_memories: graphResponse.new_memories,
+                new_clues: graphResponse.new_clues,
+                resolved_clues: graphResponse.resolved_clues,
+                character_updates: graphResponse.character_updates,
+                relationship_updates: graphResponse.chapterPlan?.relationship_updates
+            };
 
             // 2. Handle DB Updates
             const updates = [];
